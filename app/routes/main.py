@@ -172,17 +172,10 @@ def analytics():
             money[i.currency or "EUR"]["planned"] += i.signed_amount
     main_currency = max(money, key=lambda c: money[c]["contract"]) if money else "EUR"
 
-    # net invoiced per month, last 12 months, main currency
+    # net invoiced per month of the selected year, main currency
     today = date.today()
-    months = []
-    y, mth = today.year, today.month
-    for _ in range(12):
-        months.append((y, mth))
-        mth -= 1
-        if mth == 0:
-            y, mth = y - 1, 12
-    months.reverse()
-    per_month = {k: Decimal(0) for k in months}
+    year = request.args.get("year", today.year, type=int)
+    per_month = {(year, m): Decimal(0) for m in range(1, 13)}
     for i in invoices:
         if i.issue_date and i.status in ("issued", "sent", "paid") and (i.currency or "EUR") == main_currency:
             k = (i.issue_date.year, i.issue_date.month)
@@ -207,8 +200,22 @@ def analytics():
     done_tasks = ProjectTask.query.filter(ProjectTask.project_id.in_(open_ids), ProjectTask.status == "done").count()
     all_tasks = ProjectTask.query.filter(ProjectTask.project_id.in_(open_ids), ProjectTask.status != "na").count()
 
+    from ..services import budget_overview, budget_years
+
+    budget_rows, budget_totals = budget_overview(year, template_id=template_id)
+    signed = [k for p in projects if p.status != "cancelled" for k in p.contracts
+              if (k.signed_date or k.start_date) and (k.signed_date or k.start_date).year == year]
+    year_stats = {
+        "contracts": len(signed),
+        "started": sum(1 for p in projects if p.start_date and p.start_date.year == year),
+        "went_live": sum(1 for p in projects if p.go_live_date and p.go_live_date.year == year),
+        "planned_go_live": sum(1 for p in open_projects if p.target_go_live and p.target_go_live.year == year
+                               and not p.go_live_date),
+    }
+
     return render_template(
-        "main/analytics.html", projects=projects, open_projects=open_projects, by_status=by_status,
+        "main/analytics.html", year=year, years=budget_years([year]), budget_rows=budget_rows,
+        budget_totals=budget_totals, year_stats=year_stats, projects=projects, open_projects=open_projects, by_status=by_status,
         product_counts=product_counts.most_common(), money=money, main_currency=main_currency,
         monthly=monthly, month_max=month_max, workload=workload, go_lives=go_lives,
         task_pct=round(100 * done_tasks / all_tasks) if all_tasks else 0, open_task_count=len(tasks),

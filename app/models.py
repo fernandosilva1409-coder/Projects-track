@@ -109,6 +109,9 @@ class Customer(db.Model):
         "Contact", backref="customer", cascade="all, delete-orphan", order_by="Contact.name"
     )
     projects = db.relationship("Project", backref="customer", order_by="Project.created_at.desc()")
+    budgets = db.relationship(
+        "CustomerBudget", backref="customer", cascade="all, delete-orphan", order_by="CustomerBudget.year.desc()"
+    )
 
     @property
     def invoice_contacts(self):
@@ -130,6 +133,23 @@ class Contact(db.Model):
 
     def __str__(self):
         return self.name
+
+
+class CustomerBudget(db.Model):
+    """Budget agreed with / expected from a customer for one calendar year."""
+
+    __table_args__ = (db.UniqueConstraint("customer_id", "year", "currency", name="uq_budget_customer_year"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    customer_id = db.Column(db.Integer, db.ForeignKey("customer.id"), nullable=False)
+    year = db.Column(db.Integer, nullable=False)
+    amount = db.Column(db.Numeric(12, 2), nullable=False)
+    currency = db.Column(db.String(3), default="EUR", nullable=False)
+    man_days = db.Column(db.Numeric(10, 2))
+    notes = db.Column(db.Text)
+
+    def __str__(self):
+        return f"Budget {self.year}"
 
 
 # ---------------------------------------------------------------------------

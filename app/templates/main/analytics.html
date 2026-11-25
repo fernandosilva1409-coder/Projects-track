@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from '_macros.html' import badge %}
+{% from '_macros.html' import badge, budget_bar %}
 {% block title %}Overall View{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -9,11 +9,13 @@
       <option value="">All products</option>
       {% for t in templates %}<option value="{{ t.id }}" {{ 'selected' if template_id == t.id }}>{{ t.name }}</option>{% endfor %}
     </select>
+    <select name="year" onchange="this.form.submit()" aria-label="Year">
+      {% for y in years %}<option value="{{ y }}" {{ 'selected' if y == year }}>{{ y }}</option>{% endfor %}
+    </select>
     <noscript><button type="submit">Filter</button></noscript>
   </form>
 </div>
 
-{% set m = money[main_currency] if main_currency in money else {} %}
 <div class="stats">
   <div class="stat"><div class="v">{{ open_projects|length }}</div><div class="k">Open projects (of {{ projects|length }})</div></div>
   <div class="stat"><div class="v">{{ task_pct }}%</div><div class="k">Tasks done in open projects</div></div>
@@ -21,8 +23,47 @@
   <div class="stat"><div class="v">{{ go_lives|length }}</div><div class="k">Go-lives in next 90 days</div></div>
 </div>
 
+<div class="panel" id="year">
+  <h2>{{ year }}: budget vs actual</h2>
+  {% for cur, t in budget_totals.items() %}
+  <div class="money-summary">
+    <div><div class="k">Budget {{ year }} ({{ cur }})</div><div class="v">{{ t.budget|money(cur) }}</div></div>
+    <div><div class="k">Contracted in {{ year }}</div><div class="v">{{ t.contracted|money(cur) }}</div></div>
+    <div><div class="k">Invoiced (net)</div><div class="v">{{ t.invoiced|money(cur) }}</div></div>
+    <div><div class="k">Planned invoices</div><div class="v">{{ t.planned|money(cur) }}</div></div>
+    <div><div class="k">Paid</div><div class="v">{{ t.paid|money(cur) }}</div></div>
+    <div><div class="k">Budget left</div><div class="v" style="{{ 'color:var(--bad)' if t.remaining < 0 }}">{{ t.remaining|money(cur) }}</div></div>
+  </div>
+  {% else %}<div class="empty">No budgets, contracts or invoices for {{ year }} yet. Add budgets on each customer page.</div>
+  {% endfor %}
+  <div class="legend" style="margin:.2rem 0 .8rem">
+    <span>{{ year_stats.contracts }} contract(s) signed</span><span>{{ year_stats.started }} project(s) started</span>
+    <span>{{ year_stats.went_live }} went live</span><span>{{ year_stats.planned_go_live }} more go-live(s) planned</span>
+  </div>
+  {% if budget_rows %}
+  <div class="legend" style="margin-bottom:.4rem"><span><i style="background:var(--accent)"></i>Invoiced</span><span><i style="background:#6b9bf2"></i>Planned</span><span><i style="background:#eceff3"></i>Budget not yet used</span></div>
+  <div class="table-wrap"><table>
+    <tr><th>Customer</th><th class="num">Budget</th><th class="num">Contracted</th><th class="num">Invoiced</th><th class="num">Planned</th>
+      <th class="num">Paid</th><th class="num">Budget left</th><th style="min-width:170px">Use of budget</th></tr>
+    {% for r in budget_rows %}
+    <tr>
+      <td><a href="{{ url_for('customers.view', id=r.customer.id) }}#budgets">{{ r.customer.name }}</a></td>
+      <td class="num">{% if r.budget is not none %}{{ r.budget|money(r.currency) }}{% else %}<a class="small" href="{{ url_for('records.new', parent='customer', pid=r.customer.id, kind='budgets') }}">set budget</a>{% endif %}</td>
+      <td class="num">{{ r.contracted|money(r.currency) }}</td>
+      <td class="num">{{ r.invoiced|money(r.currency) }}</td>
+      <td class="num">{{ r.planned|money(r.currency) }}</td>
+      <td class="num">{{ r.paid|money(r.currency) }}</td>
+      <td class="num">{% if r.remaining is not none %}<span style="{{ 'color:var(--bad)' if r.remaining < 0 }}">{{ r.remaining|money(r.currency) }}</span>{% endif %}</td>
+      <td>{% if r.budget %}{{ budget_bar(r) }}{% else %}<span class="muted small">no budget</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+  <p class="help">Contracted = contracts signed in {{ year }}. Invoiced = issued, sent and paid invoices minus credit notes, by issue date. Paid = by payment date. Budget left = budget − invoiced − planned.</p>
+</div>
+
 <div class="panel">
-  <h2>Money</h2>
+  <h2>All-time totals</h2>
   {% for cur, v in money.items() %}
   <div class="money-summary">
     <div><div class="k">Contract value ({{ cur }})</div><div class="v">{{ v.contract|money(cur) }}</div></div>
@@ -39,8 +80,8 @@
 
 <div class="grid two">
   <div class="panel">
-    <h2>Net invoiced per month ({{ main_currency }})</h2>
-    <div class="vbars" role="img" aria-label="Net invoiced per month, last 12 months">
+    <h2>Net invoiced per month in {{ year }} ({{ main_currency }})</h2>
+    <div class="vbars" role="img" aria-label="Net invoiced per month in {{ year }}">
       {% for d, v in monthly %}
       {% set h = ((v if v > 0 else 0) / month_max * 100)|round(1) %}
       <div class="col"><div class="tip">{{ d.strftime('%b %Y') }}: {{ v|money(main_currency) }}</div><span style="height:{{ h }}%"></span></div>

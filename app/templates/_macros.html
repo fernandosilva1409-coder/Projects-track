@@ -68,3 +68,12 @@
   {% else %}<div class="empty">No history yet.</div>
   {% endfor %}
 {% endmacro %}
+
+{% macro budget_bar(r) %}
+  {% set inv = [[(r.invoiced / r.budget * 100) if r.invoiced > 0 else 0, 100]|min, 0]|max %}
+  {% set pl = [[(r.planned / r.budget * 100) if r.planned > 0 else 0, 100 - inv]|min, 0]|max %}
+  <div class="budget-bar" title="Invoiced {{ r.pct_invoiced }}% · with planned {{ r.pct_forecast }}% of budget">
+    <span class="inv" style="width:{{ inv|round(1) }}%"></span><span class="pl" style="width:{{ pl|round(1) }}%"></span>
+  </div>
+  <div class="small muted">{{ r.pct_invoiced }}% invoiced{% if r.planned %} · {{ r.pct_forecast }}% with planned{% endif %}{% if r.pct_forecast and r.pct_forecast > 100 %} <span class="badge overdue">over budget</span>{% endif %}</div>
+{% endmacro %}

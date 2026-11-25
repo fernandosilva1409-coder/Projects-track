@@ -7,7 +7,7 @@ from ..forms import Field
 from ..forms import apply_form
 from ..models import (
     CMO, CURRENCIES, ENVIRONMENTS, INVOICE_KINDS, INVOICE_STATUSES, ONBOARDING_STATUSES,
-    Contact, Contract, Customer, Invoice, Project, SerialNumber,
+    Contact, Contract, Customer, CustomerBudget, Invoice, Project, SerialNumber,
 )
 
 bp = Blueprint("records", __name__)
@@ -24,7 +24,33 @@ def _project_currency(project):
     return {"currency": project.currency}
 
 
+def _validate_budget(obj, parent):
+    if obj.year is not None and not 2000 <= obj.year <= 2100:
+        return ["Year must be between 2000 and 2100."]
+    with db.session.no_autoflush:
+        dup = CustomerBudget.query.filter(
+            CustomerBudget.customer_id == parent.id, CustomerBudget.year == obj.year,
+            CustomerBudget.currency == obj.currency, CustomerBudget.id != obj.id,
+        ).first()
+    return [f"There is already a {obj.year} budget in {obj.currency} for this customer. Edit that one."] if dup else []
+
+
+def _budget_defaults(customer):
+    from datetime import date
+
+    return {"year": date.today().year, "currency": "EUR"}
+
+
 ENTITIES = {
+    "budgets": dict(
+        model=CustomerBudget, parent="customer", title="Yearly budget", defaults=_budget_defaults,
+        validate=_validate_budget, fields=[
+            Field("year", "Year", "int", required=True),
+            Field("amount", "Budget amount (excl. VAT)", "decimal", required=True),
+            Field("currency", "Currency", "select", required=True, choices=CURRENCIES),
+            Field("man_days", "Budgeted man-days", "decimal"),
+            Field("notes", "Notes", "textarea", help="e.g. PO number, what the budget covers"),
+        ]),
     "contacts": dict(
         model=Contact, parent="customer", title="Contact", fields=[
             Field("name", "Name", required=True),
@@ -117,6 +143,8 @@ def new(parent, pid, kind):
     errors = []
     if request.method == "POST":
         errors = apply_form(obj, ent["fields"], request.form, parent_obj)
+        if not errors and ent.get("validate"):
+            errors = ent["validate"](obj, parent_obj)
         if not errors:
             setattr(obj, f"{parent}_id", pid)
             db.session.add(obj)
@@ -139,6 +167,10 @@ def edit(kind, id):
     errors = []
     if request.method == "POST":
         errors = apply_form(obj, ent["fields"], request.form, parent_obj)
+        if not errors and ent.get("validate"):
+            errors = ent["validate"](obj, parent_obj)
+            if errors:
+                db.session.rollback()
         if not errors:
             db.session.commit()
             flash(f"{ent['title']} saved.", "success")

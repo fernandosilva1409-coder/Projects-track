@@ -132,3 +132,29 @@ def test_user_management(client, app):
     assert c2.get("/settings/backup").status_code == 403
     assert client.get("/settings/backup").status_code == 200
     assert client.get("/settings/").status_code == 302
+
+
+def test_budgets(client, app):
+    cid, pid = _create_project(client, app)
+    assert client.post(f"/customer/{cid}/budgets/new", data={"year": "2026", "amount": "100000",
+                                                            "currency": "EUR"}).status_code == 302
+    r = client.post(f"/customer/{cid}/budgets/new", data={"year": "2026", "amount": "5", "currency": "EUR"})
+    assert r.status_code == 200 and b"already" in r.data
+    client.post(f"/project/{pid}/contracts/new", data={"signed_date": "2026-03-01", "fixed_price": "60000",
+                                                      "currency": "EUR"})
+    client.post(f"/project/{pid}/invoices/new", data={"kind": "invoice", "status": "paid", "amount": "30000",
+                                                     "currency": "EUR", "issue_date": "2026-04-01"})
+    client.post(f"/project/{pid}/invoices/new", data={"kind": "credit_note", "status": "issued", "amount": "1000",
+                                                     "currency": "EUR", "issue_date": "2026-05-01"})
+    client.post(f"/project/{pid}/invoices/new", data={"kind": "invoice", "status": "planned", "amount": "20000",
+                                                     "currency": "EUR", "issue_date": "2026-12-01"})
+    with app.app_context():
+        from app.services import budget_overview
+        rows, totals = budget_overview(2026)
+        r = rows[0]
+        assert r["budget"] == 100000 and r["contracted"] == 60000
+        assert r["invoiced"] == 29000 and r["paid"] == 30000 and r["planned"] == 20000
+        assert r["remaining"] == 51000 and r["pct_invoiced"] == 29
+    page = client.get("/analytics?year=2026").data
+    assert b"budget vs actual" in page and b"51" in page
+    assert client.get(f"/customers/{cid}").status_code == 200

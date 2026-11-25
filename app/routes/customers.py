@@ -1,3 +1,5 @@
+from datetime import date
+
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from ..extensions import db
@@ -67,7 +69,15 @@ def view(id):
         AuditLog.query.filter(db.or_(AuditLog.customer_id == id, AuditLog.project_id.in_(project_ids or [-1])))
         .order_by(AuditLog.created_at.desc()).limit(30).all()
     )
-    return render_template("customers/view.html", customer=c, history=history)
+    from ..services import budget_overview
+
+    budget_rows = []
+    for y in sorted({b.year for b in c.budgets} | {date.today().year}, reverse=True):
+        rows, _t = budget_overview(y, [c])
+        for r in rows:
+            r["year"] = y
+            budget_rows.append(r)
+    return render_template("customers/view.html", customer=c, history=history, budget_rows=budget_rows)
 
 
 @bp.post("/<int:id>/delete")

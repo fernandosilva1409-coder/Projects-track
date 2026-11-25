@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from '_macros.html' import badge, history_list %}
+{% from '_macros.html' import badge, history_list, budget_bar %}
 {% block title %}{{ customer.name }}{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -33,6 +33,29 @@
       {% endfor %}
     </table></div>
   </div>
+</div>
+<div class="panel" id="budgets">
+  <h2>Yearly budget <a class="btn small" href="{{ url_for('records.new', parent='customer', pid=customer.id, kind='budgets') }}">+ Budget</a></h2>
+  <div class="table-wrap"><table>
+    <tr><th>Year</th><th class="num">Budget</th><th class="num">Contracted</th><th class="num">Invoiced (net)</th><th class="num">Planned</th>
+      <th class="num">Paid</th><th class="num">Budget left</th><th style="min-width:140px">Used</th></tr>
+    {% for r in budget_rows %}
+    {% set b = customer.budgets|selectattr('year', 'equalto', r.year)|selectattr('currency', 'equalto', r.currency)|first %}
+    <tr>
+      <td>{% if b %}<a href="{{ url_for('records.edit', kind='budgets', id=b.id) }}">{{ r.year }}</a>{% else %}{{ r.year }}{% endif %}
+        {% if b and b.notes %}<div class="muted small">{{ b.notes|truncate(60) }}</div>{% endif %}</td>
+      <td class="num">{% if r.budget is not none %}{{ r.budget|money(r.currency) }}{% if r.budget_days %}<div class="muted small">{{ r.budget_days|num }} days</div>{% endif %}{% else %}<a class="small" href="{{ url_for('records.new', parent='customer', pid=customer.id, kind='budgets') }}">set budget</a>{% endif %}</td>
+      <td class="num">{{ r.contracted|money(r.currency) }}</td>
+      <td class="num">{{ r.invoiced|money(r.currency) }}</td>
+      <td class="num">{{ r.planned|money(r.currency) }}</td>
+      <td class="num">{{ r.paid|money(r.currency) }}</td>
+      <td class="num">{% if r.remaining is not none %}<span style="{{ 'color:var(--bad)' if r.remaining < 0 }}">{{ r.remaining|money(r.currency) }}</span>{% endif %}</td>
+      <td>{% if r.budget %}{{ budget_bar(r) }}{% endif %}</td>
+    </tr>
+    {% else %}<tr><td colspan="8" class="empty">No budget yet.</td></tr>
+    {% endfor %}
+  </table></div>
+  <p class="help">Contracted = contracts signed that year. Invoiced = issued, sent and paid invoices minus credit notes, by issue date. Planned = planned invoices dated that year. Budget left = budget − invoiced − planned.</p>
 </div>
 <div class="panel">
   <h2>Projects</h2>
