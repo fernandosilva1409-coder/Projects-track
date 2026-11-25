@@ -459,6 +459,8 @@ class Invoice(db.Model):
 
     def __str__(self):
         prefix = "CN" if self.kind == "credit_note" else "INV"
+        if self.number and self.number.upper().startswith(prefix):
+            return self.number
         return f"{prefix} {self.number or '#' + str(self.id)}"
 
 
