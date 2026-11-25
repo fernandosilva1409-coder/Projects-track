@@ -47,8 +47,8 @@ One-time setup (needs a Fly.io account and `flyctl`, https://fly.io/docs/flyctl/
 
 ```bash
 fly auth login
-fly launch --no-deploy --copy-config --name <your-app-name> --region fra
-fly volumes create tracker_data --size 1 --region fra
+fly launch --no-deploy --copy-config --name <your-app-name> --region mad
+fly volumes create tracker_data --size 1 --region mad
 fly secrets set SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_hex(32))')" \
                 ADMIN_USERNAME=fernando ADMIN_PASSWORD='choose-a-strong-password' ADMIN_NAME='Fernando'
 fly deploy
