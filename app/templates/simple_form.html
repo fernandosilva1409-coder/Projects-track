@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import fields as render_fields, errors_box, csrf, delete_button %}
+{% block title %}{{ heading }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ heading }}</h1></div>
+<div class="panel">
+  {{ errors_box(errors) }}
+  <form method="post">
+    {{ csrf() }}
+    {{ render_fields(fields, obj, submitted) }}
+    <div class="form-actions">
+      <div class="actions"><button class="primary" type="submit">Save</button><a class="btn" href="{{ cancel_url }}">Cancel</a></div>
+    </div>
+  </form>
+  {% if delete_url %}<div class="form-actions"><span></span>{{ delete_button(delete_url, warning=delete_warning or 'Delete this? It stays visible in the history.') }}</div>{% endif %}
+</div>
+{% endblock %}

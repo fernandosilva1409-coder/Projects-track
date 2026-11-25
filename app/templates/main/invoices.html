@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import badge %}
+{% block title %}Invoices{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Invoices and credit notes</h1>
+  <a class="btn" href="{{ url_for('main.invoices_csv', **request.args) }}">Export CSV</a></div>
+<form class="filters" method="get">
+  <select name="status"><option value="">All statuses</option>
+    <option value="open" {{ 'selected' if filters.status == 'open' }}>Open (not paid / cancelled)</option>
+    {% for v, t in statuses %}<option value="{{ v }}" {{ 'selected' if filters.status == v }}>{{ t }}</option>{% endfor %}</select>
+  <select name="kind"><option value="">Invoices and credit notes</option>
+    {% for v, t in kinds %}<option value="{{ v }}" {{ 'selected' if filters.kind == v }}>{{ t }}s</option>{% endfor %}</select>
+  <select name="year"><option value="">All years</option>
+    {% for y in years %}<option value="{{ y }}" {{ 'selected' if filters.year == y|string }}>{{ y }}</option>{% endfor %}</select>
+  <select name="customer_id"><option value="">All customers</option>
+    {% for c in customers %}<option value="{{ c.id }}" {{ 'selected' if filters.customer_id == c.id }}>{{ c.name }}</option>{% endfor %}</select>
+  <button type="submit">Filter</button>
+</form>
+{% if totals %}
+<div class="stats">
+  {% for cur, t in totals.items() %}
+  <div class="stat"><div class="v">{{ t.invoiced|money(cur) }}</div><div class="k">Invoiced ({{ cur }})</div></div>
+  <div class="stat"><div class="v">{{ t.credited|money(cur) }}</div><div class="k">Credit notes ({{ cur }})</div></div>
+  <div class="stat"><div class="v">{{ t.paid|money(cur) }}</div><div class="k">Paid, net ({{ cur }})</div></div>
+  <div class="stat"><div class="v">{{ t.open|money(cur) }}</div><div class="k">Awaiting payment ({{ cur }})</div></div>
+  {% endfor %}
+</div>
+{% endif %}
+<div class="panel"><div class="table-wrap"><table>
+  <tr><th>Customer / project</th><th>Type</th><th>Number</th><th>Description</th><th>Issue date</th><th>Due</th><th class="num">Amount</th><th>Status</th></tr>
+  {% for i in invoices %}
+  <tr>
+    <td><a href="{{ url_for('projects.view', id=i.project_id) }}#invoices">{{ i.project.customer.name }}</a><div class="muted small">{{ i.project.name }}</div></td>
+    <td>{{ badge(i.kind, i.kind_label) }}</td>
+    <td><a href="{{ url_for('records.edit', kind='invoices', id=i.id) }}">{{ i.number or '(no number)' }}</a>{% if i.related_invoice %}<div class="muted small">for {{ i.related_invoice }}</div>{% endif %}</td>
+    <td class="small">{{ i.description or '' }}</td>
+    <td class="small">{{ i.issue_date|d }}</td>
+    <td class="small">{{ i.due_date|d }}</td>
+    <td class="num">{{ i.signed_amount|money(i.currency) }}</td>
+    <td>{{ badge('overdue' if i.is_overdue else i.status, 'Overdue' if i.is_overdue else i.status_label) }}</td>
+  </tr>
+  {% else %}<tr><td colspan="8" class="empty">No invoices match.</td></tr>
+  {% endfor %}
+</table></div></div>
+{% endblock %}

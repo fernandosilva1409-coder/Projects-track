@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Log in{% endblock %}
+{% block content %}
+<div class="login-box panel">
+  <h1>Project Tracker</h1>
+  <p class="muted">CSDB &amp; Platbricks customer projects</p>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <p><label class="lbl" for="username">Username</label><input id="username" type="text" name="username" autofocus required autocomplete="username"></p>
+    <p><label class="lbl" for="password">Password</label><input id="password" type="password" name="password" required autocomplete="current-password"></p>
+    <p><label class="checkbox"><input type="checkbox" name="remember" checked> Keep me logged in</label></p>
+    <button class="primary" type="submit">Log in</button>
+  </form>
+</div>
+{% endblock %}

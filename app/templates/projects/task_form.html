@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import fields as render_fields, errors_box, csrf, delete_button %}
+{% block title %}{{ heading }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>{{ heading }}</h1>{% if project %}<div class="muted">{{ project.customer.name }} · {{ project.name }}</div>{% endif %}</div></div>
+<div class="panel">
+  {{ errors_box(errors) }}
+  <form method="post">
+    {{ csrf() }}
+    {{ render_fields(fields, obj, submitted) }}
+    <h3>Prerequisites</h3>
+    <p class="help">This task can only start when the ticked tasks are done. Leave everything unticked to run it in parallel from the start.
+      Tasks that share the same prerequisites run in parallel; a chain of single prerequisites runs in series.</p>
+    <div class="checks">
+      {% for o in others %}
+      <label><input type="checkbox" name="depends_on" value="{{ o.id }}" {{ 'checked' if o.id in selected }}>
+        <span>{{ o.name }} <span class="muted small">({{ label(M.TASK_PHASES, o.phase) }})</span></span></label>
+      {% else %}<span class="empty">No other tasks yet.</span>
+      {% endfor %}
+    </div>
+    <div class="form-actions">
+      <div class="actions"><button class="primary" type="submit">Save</button><a class="btn" href="{{ cancel_url }}">Cancel</a></div>
+    </div>
+  </form>
+  {% if delete_url %}<div class="form-actions"><span></span>{{ delete_button(delete_url) }}</div>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import badge, history_list %}
+{% block title %}Dashboard{% endblock %}
+{% macro task_rows(tasks, show_assignee=True) %}
+  <div class="table-wrap"><table>
+  {% for t in tasks %}
+    <tr>
+      <td><a href="{{ url_for('projects.view', id=t.project_id) }}#task-{{ t.id }}">{{ t.name }}</a>
+        <div class="muted small">{{ t.project.customer.name }} · {{ t.project.name }}</div></td>
+      {% if show_assignee %}<td class="small">{{ t.assignee.display_name if t.assignee else '' }}</td>{% endif %}
+      <td class="num small">{% if t.due_date %}<span class="{{ 'badge overdue' if t.is_overdue }}">{{ t.due_date|d }}</span>{% endif %}</td>
+      <td>{{ badge(t.status, t.status_label) }}</td>
+    </tr>
+  {% else %}<tr><td class="empty">Nothing here.</td></tr>
+  {% endfor %}
+  </table></div>
+{% endmacro %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Hello {{ current_user.display_name }}</h1><div class="muted">{{ today|d }}</div></div>
+  <div class="actions"><a class="btn" href="{{ url_for('customers.new') }}">+ Customer</a><a class="btn primary" href="{{ url_for('projects.new') }}">+ Project</a></div>
+</div>
+<div class="stats">
+  <div class="stat"><div class="v">{{ projects|length }}</div><div class="k">Open projects</div></div>
+  <div class="stat"><div class="v">{{ my_tasks|length }}</div><div class="k">My open tasks</div></div>
+  <div class="stat"><div class="v">{{ ready|length }}</div><div class="k">Tasks ready to start</div></div>
+  <div class="stat"><div class="v" style="color:{{ 'var(--bad)' if overdue }}">{{ overdue|length }}</div><div class="k">Overdue tasks</div></div>
+  <div class="stat"><div class="v">{{ to_issue|length }}</div><div class="k">Invoices to issue (14 days)</div></div>
+  <div class="stat"><div class="v">{{ unpaid|length }}</div><div class="k">Invoices awaiting payment</div></div>
+</div>
+
+<div class="panel">
+  <h2>Open projects</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Customer / project</th><th>Product</th><th>PM</th><th>Status</th><th>Target go-live</th><th>Progress</th><th>Next steps</th></tr>
+    {% for p in projects %}
+    <tr>
+      <td><a href="{{ url_for('projects.view', id=p.id) }}">{{ p.customer.name }}</a><div class="muted small">{{ p.name }}</div></td>
+      <td class="small">{{ p.template.name if p.template else '' }}</td>
+      <td class="small">{{ p.project_manager.display_name if p.project_manager else '' }}</td>
+      <td>{{ badge(p.status, p.status_label) }}</td>
+      <td class="small">{{ p.target_go_live|d }}</td>
+      <td style="min-width:110px"><div class="progress"><span style="width:{{ p.progress }}%"></span></div><div class="small muted">{{ p.progress }}%</div></td>
+      <td class="small">{% for t in p.tasks if t.is_ready %}{% if loop.index <= 3 %}<div>{{ t.name }}{% if t.status == 'in_progress' %} <span class="badge in_progress">in progress</span>{% endif %}</div>{% endif %}{% endfor %}</td>
+    </tr>
+    {% else %}<tr><td colspan="7" class="empty">No open projects yet. <a href="{{ url_for('projects.new') }}">Create the first one</a>.</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+
+<div class="grid two">
+  <div class="panel"><h2>My open tasks</h2>{{ task_rows(my_tasks, False) }}</div>
+  <div class="panel"><h2>Overdue or blocked</h2>{{ task_rows(overdue + (blocked|reject('in', overdue)|list)) }}</div>
+  <div class="panel"><h2>Ready to start</h2><div class="help" style="margin:-.5rem 0 .5rem">All prerequisites are done.</div>{{ task_rows(ready) }}</div>
+  <div class="panel">
+    <h2>Invoices to follow up</h2>
+    <div class="table-wrap"><table>
+    {% for i in to_issue + unpaid %}
+      <tr>
+        <td><a href="{{ url_for('records.edit', kind='invoices', id=i.id) }}">{{ i }}</a> <div class="muted small">{{ i.project.customer.name }} · {{ i.description or '' }}</div></td>
+        <td class="num">{{ i.signed_amount|money(i.currency) }}</td>
+        <td class="small">{% if i.status in ('planned','to_issue') %}issue {{ i.issue_date|d or 'date not set' }}{% else %}due {{ i.due_date|d }}{% endif %}</td>
+        <td>{{ badge('overdue' if i.is_overdue else i.status, 'Overdue' if i.is_overdue else i.status_label) }}</td>
+      </tr>
+    {% else %}<tr><td class="empty">Nothing to follow up.</td></tr>
+    {% endfor %}
+    </table></div>
+  </div>
+</div>
+<div class="panel"><h2>Recent activity <a class="small" href="{{ url_for('main.history') }}">All history</a></h2>{{ history_list(recent) }}</div>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import badge %}
+{% block title %}Projects{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Projects</h1><a class="btn primary" href="{{ url_for('projects.new') }}">+ New project</a></div>
+<form class="filters" method="get">
+  <input type="search" name="q" value="{{ q }}" placeholder="Project or customer">
+  <select name="status">
+    <option value="open" {{ 'selected' if status == 'open' }}>All open</option>
+    <option value="all" {{ 'selected' if status == 'all' }}>All, including closed</option>
+    {% for v, t in M.PROJECT_STATUSES %}<option value="{{ v }}" {{ 'selected' if status == v }}>{{ t }}</option>{% endfor %}
+  </select>
+  <select name="template_id"><option value="">All products</option>
+    {% for t in templates %}<option value="{{ t.id }}" {{ 'selected' if template_id == t.id }}>{{ t.name }}</option>{% endfor %}</select>
+  <select name="pm_id"><option value="">All PMs</option>
+    {% for v, t in users %}<option value="{{ v }}" {{ 'selected' if pm_id|string == v }}>{{ t }}</option>{% endfor %}</select>
+  <button type="submit">Filter</button>
+</form>
+<div class="panel"><div class="table-wrap"><table>
+  <tr><th>Customer</th><th>Project</th><th>Product</th><th>PM</th><th>Status</th><th>Start</th><th>Target go-live</th><th>Progress</th><th class="num">Contract</th><th class="num">Remaining to invoice</th></tr>
+  {% for p in projects %}
+  <tr>
+    <td>{{ p.customer.name }}</td>
+    <td><a href="{{ url_for('projects.view', id=p.id) }}">{{ p.name }}</a></td>
+    <td class="small">{{ p.template.name if p.template else '' }}</td>
+    <td class="small">{{ p.project_manager.display_name if p.project_manager else '' }}</td>
+    <td>{{ badge(p.status, p.status_label) }}</td>
+    <td class="small">{{ p.start_date|d }}</td>
+    <td class="small">{{ p.target_go_live|d }}</td>
+    <td style="min-width:100px"><div class="progress"><span style="width:{{ p.progress }}%"></span></div><span class="small muted">{{ p.progress }}%</span></td>
+    <td class="num">{{ p.contract_value|money(p.currency) }}</td>
+    <td class="num">{{ p.remaining_to_invoice|money(p.currency) }}</td>
+  </tr>
+  {% else %}<tr><td colspan="10" class="empty">No projects match.</td></tr>
+  {% endfor %}
+</table></div></div>
+{% endblock %}

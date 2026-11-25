@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import history_list %}
+{% block title %}History{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  {% if project %}<div class="muted"><a href="{{ url_for('projects.view', id=project.id) }}">{{ project.customer.name }} · {{ project.name }}</a></div>{% endif %}
+  <h1>History</h1><div class="muted">Every change, by whom and when. Deleted records stay listed here.</div></div></div>
+{% if not project %}
+<form class="filters" method="get">
+  <select name="entity"><option value="">Everything</option>
+    {% for e in entities %}<option value="{{ e }}" {{ 'selected' if filters.entity == e }}>{{ entity_label(e) }}</option>{% endfor %}</select>
+  <select name="user_id"><option value="">All users</option>
+    {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if filters.user_id == u.id }}>{{ u.display_name }}</option>{% endfor %}</select>
+  <button type="submit">Filter</button>
+</form>
+{% endif %}
+<div class="panel">{{ history_list(logs.items) }}</div>
+{% set link_args = dict(request.view_args or {}, **filters) %}
+<div class="actions">
+  {% if logs.has_prev %}<a class="btn" href="{{ url_for(request.endpoint, page=logs.prev_num, **link_args) }}">← Newer</a>{% endif %}
+  <span class="muted small">Page {{ logs.page }} of {{ logs.pages or 1 }}</span>
+  {% if logs.has_next %}<a class="btn" href="{{ url_for(request.endpoint, page=logs.next_num, **link_args) }}">Older →</a>{% endif %}
+</div>
+{% endblock %}

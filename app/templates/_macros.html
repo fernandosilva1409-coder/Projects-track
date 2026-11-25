@@ -1,0 +1,70 @@
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
+
+{% macro badge(value, text=None) %}<span class="badge {{ value }}">{{ text or value }}</span>{% endmacro %}
+
+{% macro errors_box(errors) %}
+  {% if errors %}<div class="errors"><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+{% endmacro %}
+
+{% macro fields(fields, obj, submitted=None, ctx=None) %}
+<div class="form-grid">
+{% for f in fields %}
+  {% set v = f.display_value(obj, submitted) %}
+  <div class="{{ 'wide' if f.wide }}">
+  {% if f.type == 'checkbox' %}
+    <label class="checkbox"><input type="checkbox" name="{{ f.name }}" {{ 'checked' if v }}> {{ f.label }}</label>
+  {% else %}
+    <label class="lbl" for="f-{{ f.name }}">{{ f.label }}{% if f.required %} *{% endif %}</label>
+    {% if f.type == 'textarea' %}
+      <textarea id="f-{{ f.name }}" name="{{ f.name }}">{{ v }}</textarea>
+    {% elif f.type in ('select', 'fk') %}
+      <select id="f-{{ f.name }}" name="{{ f.name }}" {{ 'required' if f.required }}>
+        {% if not f.required or f.type == 'fk' %}<option value="">—</option>{% endif %}
+        {% for val, text in f.choices(ctx) %}<option value="{{ val }}" {{ 'selected' if val|string == v|string }}>{{ text }}</option>{% endfor %}
+      </select>
+    {% elif f.type == 'decimal' %}
+      <input id="f-{{ f.name }}" type="text" inputmode="decimal" name="{{ f.name }}" value="{{ v }}" {{ 'required' if f.required }}>
+    {% elif f.type == 'int' %}
+      <input id="f-{{ f.name }}" type="number" step="1" name="{{ f.name }}" value="{{ v }}" {{ 'required' if f.required }}>
+    {% else %}
+      <input id="f-{{ f.name }}" type="{{ f.type if f.type in ('date','email','url') else 'text' }}" name="{{ f.name }}" value="{{ v }}" {{ 'required' if f.required }}>
+    {% endif %}
+  {% endif %}
+  {% if f.help %}<div class="help">{{ f.help }}</div>{% endif %}
+  </div>
+{% endfor %}
+</div>
+{% endmacro %}
+
+{% macro delete_button(url, text='Delete', warning='Delete this? It stays visible in the history.') %}
+<form class="inline" method="post" action="{{ url }}" onsubmit="return confirm({{ warning|tojson }})">
+  {{ csrf() }}<button class="danger" type="submit">{{ text }}</button>
+</form>
+{% endmacro %}
+
+{% macro history_list(logs, show_project=False) %}
+  {% for log in logs %}
+  <div class="history-item">
+    <strong>{{ log.user.display_name if log.user else 'System' }}</strong>
+    <span class="muted">{{ {'create': 'added', 'update': 'changed', 'delete': 'deleted'}[log.action] }}</span>
+    {{ entity_label(log.entity) | lower }} <strong>{{ log.summary }}</strong>
+    <span class="muted small">· {{ log.created_at|dt }}</span>
+    {% set ch = log.changes|changes %}
+    {% if ch and log.action == 'create' %}
+      <div class="changes">{% for k, pair in ch.items() if k not in ('password_hash',) and not k.endswith('_id') %}{{ k.replace('_', ' ') }}: <ins>{{ pair[1]|string|truncate(80) }}</ins>{{ '; ' if not loop.last }}{% endfor %}</div>
+    {% elif ch and log.action == 'update' %}
+      <div class="changes">
+      {% for k, pair in ch.items() %}
+        {{ k.replace('_', ' ') }}:
+        {% if pair[0] is iterable and pair[0] is not string %}
+          {% if pair[0] %}<del>{{ pair[0]|join(', ') }}</del>{% endif %} {% if pair[1] %}<ins>+ {{ pair[1]|join(', ') }}</ins>{% endif %}
+        {% else %}
+          <del>{{ pair[0] if pair[0] is not none else '∅' }}</del> → <ins>{{ pair[1] if pair[1] is not none else '∅' }}</ins>
+        {% endif %}{{ ';' if not loop.last }}
+      {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+  {% else %}<div class="empty">No history yet.</div>
+  {% endfor %}
+{% endmacro %}

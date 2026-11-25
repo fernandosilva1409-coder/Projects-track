@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import fields as render_fields, errors_box, csrf, delete_button %}
+{% block title %}{{ tpl.name }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="muted"><a href="{{ url_for('settings.index') }}">Settings</a> · Project template</div><h1>{{ tpl.name }}</h1></div></div>
+<div class="panel">
+  {{ errors_box(errors) }}
+  <form method="post">
+    {{ csrf() }}
+    {{ render_fields(fields, tpl, submitted) }}
+    <div class="form-actions"><div class="actions"><button class="primary" type="submit">Save</button></div></div>
+  </form>
+  <p class="help">Used by {{ in_use }} project(s). Changes apply to new projects only.</p>
+</div>
+{% for phase, phase_label in M.TASK_PHASES %}
+<div class="panel" id="{{ 'tasks' if phase == 'project' else 'pre' }}">
+  <h2>{{ phase_label }} {{ 'checklist' if phase == 'pre' else 'tasks' }}
+    <span class="actions">
+      <form class="inline" method="post" action="{{ url_for('settings.template_arrange', id=tpl.id, mode='serial') }}" onsubmit="return confirm('Make every {{ phase_label|lower }} task wait on the one above it?')">{{ csrf() }}<input type="hidden" name="phase" value="{{ phase }}"><button class="small" type="submit">All in series</button></form>
+      <form class="inline" method="post" action="{{ url_for('settings.template_arrange', id=tpl.id, mode='parallel') }}" onsubmit="return confirm('Remove dependencies between {{ phase_label|lower }} tasks so they all run in parallel?')">{{ csrf() }}<input type="hidden" name="phase" value="{{ phase }}"><button class="small" type="submit">All in parallel</button></form>
+      <a class="btn small primary" href="{{ url_for('settings.template_task_new', id=tpl.id, phase=phase) }}">+ Task</a>
+    </span>
+  </h2>
+  <div class="table-wrap"><table>
+    <tr><th title="Tasks with the same step run in parallel">Step</th><th></th><th>Task</th><th>Waits on</th><th class="num">Days</th><th></th></tr>
+    {% for t in tpl.tasks if t.phase == phase %}
+    <tr id="tt-{{ t.id }}">
+      <td><span class="step">{{ steps[t.id] }}</span></td>
+      <td style="white-space:nowrap">
+        <form class="inline" method="post" action="{{ url_for('settings.template_task_move', id=t.id, direction='up') }}">{{ csrf() }}<button class="link small" title="Move up">▲</button></form>
+        <form class="inline" method="post" action="{{ url_for('settings.template_task_move', id=t.id, direction='down') }}">{{ csrf() }}<button class="link small" title="Move down">▼</button></form>
+      </td>
+      <td><a href="{{ url_for('settings.template_task_edit', id=t.id) }}">{{ t.name }}</a></td>
+      <td class="small">{{ t.depends_on|join(', ') or 'Nothing (can start right away)' }}</td>
+      <td class="num">{{ t.duration_days or '' }}</td>
+      <td><a class="btn small" href="{{ url_for('settings.template_task_edit', id=t.id) }}">Edit</a></td>
+    </tr>
+    {% else %}<tr><td colspan="6" class="empty">No tasks.</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endfor %}
+<div class="panel">
+  <h2>Delete template</h2>
+  <p class="help">Only possible when no project uses it. Otherwise untick "Active" to hide it from new projects.</p>
+  {{ delete_button(url_for('settings.template_delete', id=tpl.id), 'Delete template') }}
+</div>
+{% endblock %}

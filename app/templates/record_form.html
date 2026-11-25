@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import fields as render_fields, errors_box, csrf, delete_button %}
+{% block title %}{{ heading }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ heading }}</h1><div class="muted">{{ parent_obj }}{% if parent_obj.customer %} · {{ parent_obj.customer }}{% endif %}</div></div>
+</div>
+<div class="panel">
+  {{ errors_box(errors) }}
+  <form method="post">
+    {{ csrf() }}
+    {{ render_fields(ent.fields, obj, submitted, parent_obj) }}
+    <div class="form-actions">
+      <div class="actions"><button class="primary" type="submit">Save</button><a class="btn" href="{{ cancel_url }}">Cancel</a></div>
+    </div>
+  </form>
+  {% if delete_url %}<div class="form-actions"><span></span>{{ delete_button(delete_url) }}</div>{% endif %}
+</div>
+{% endblock %}

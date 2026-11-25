@@ -1,0 +1,232 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import badge, csrf, history_list, delete_button %}
+{% block title %}{{ p.name }}{% endblock %}
+
+{% macro task_table(tasks) %}
+<div class="table-wrap"><table>
+  <tr><th title="Tasks with the same step can run in parallel">Step</th><th></th><th>Task</th><th>Assignee / status</th><th>Due</th><th>Done</th><th></th></tr>
+  {% for t in tasks|sort(attribute='position') %}
+  <tr id="task-{{ t.id }}" class="{{ 'finished' if t.is_finished }}">
+    <td><span class="step">{{ steps[t.id] }}</span></td>
+    <td style="white-space:nowrap">
+      <form class="inline" method="post" action="{{ url_for('projects.task_move', id=t.id, direction='up') }}">{{ csrf() }}<button class="link small" title="Move up">▲</button></form>
+      <form class="inline" method="post" action="{{ url_for('projects.task_move', id=t.id, direction='down') }}">{{ csrf() }}<button class="link small" title="Move down">▼</button></form>
+    </td>
+    <td class="name">
+      <a href="{{ url_for('projects.task_edit', id=t.id) }}">{{ t.name }}</a>
+      {% if t.is_ready %} {{ badge('ready', 'ready') }}{% endif %}
+      {% if t.waiting_on and not t.is_finished %}<div class="muted small">Waits on: {{ t.waiting_on|join(', ') }}</div>{% endif %}
+      {% if t.notes %}<div class="muted small" style="white-space:pre-line">{{ t.notes|truncate(160) }}</div>{% endif %}
+    </td>
+    <td>
+      <form method="post" action="{{ url_for('projects.task_status', id=t.id) }}" class="actions">
+        {{ csrf() }}
+        <select class="compact" name="assignee_id" onchange="this.form.submit()">
+          <option value="">Unassigned</option>
+          {% for v, n in users %}<option value="{{ v }}" {{ 'selected' if t.assignee_id|string == v }}>{{ n }}</option>{% endfor %}
+        </select>
+        <select class="compact" name="status" onchange="this.form.submit()">
+          {% for v, n in M.TASK_STATUSES %}<option value="{{ v }}" {{ 'selected' if t.status == v }}>{{ n }}</option>{% endfor %}
+        </select>
+        <noscript><button class="small">Save</button></noscript>
+      </form>
+    </td>
+    <td class="small">{% if t.due_date %}<span class="{{ 'badge overdue' if t.is_overdue }}">{{ t.due_date|d }}</span>{% endif %}</td>
+    <td class="small">{{ t.completed_date|d }}</td>
+    <td><a class="btn small" href="{{ url_for('projects.task_edit', id=t.id) }}">Edit</a></td>
+  </tr>
+  {% else %}<tr><td colspan="7" class="empty">No tasks in this phase.</td></tr>
+  {% endfor %}
+</table></div>
+{% endmacro %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="muted"><a href="{{ url_for('customers.view', id=p.customer_id) }}">{{ p.customer.name }}</a> · {{ p.template.name if p.template else 'No template' }}</div>
+    <h1>{{ p.name }} {{ badge(p.status, p.status_label) }}</h1>
+  </div>
+  <div class="actions">
+    <div style="min-width:160px"><div class="progress"><span style="width:{{ p.progress }}%"></span></div><div class="small muted">{{ p.progress }}% of tasks done</div></div>
+    <a class="btn" href="{{ url_for('projects.edit', id=p.id) }}">Edit project</a>
+  </div>
+</div>
+
+<nav class="tabs">
+  <a href="#overview">Overview</a><a href="#pre">Pre-project</a><a href="#tasks">Tasks</a><a href="#contracts">Contracts</a>
+  <a href="#cmos">CMOs</a><a href="#serials">Serial numbers</a><a href="#invoices">Invoices</a><a href="#files">Files</a>
+  <a href="#notes">Notes</a><a href="#history">History</a>
+</nav>
+
+<div class="grid two" id="overview">
+  <div class="panel">
+    <h2>Project details</h2>
+    <dl class="kv">
+      <dt>Project manager</dt><dd>{{ p.project_manager.display_name if p.project_manager else '—' }}</dd>
+      <dt>Start</dt><dd>{{ p.start_date|d or '—' }}</dd>
+      <dt>Target go-live</dt><dd>{{ p.target_go_live|d or '—' }}</dd>
+      <dt>Actual go-live</dt><dd>{{ p.go_live_date|d or '—' }}</dd>
+      <dt>Controlling project</dt><dd>{{ p.controlling_project_ref or '—' }}</dd>
+      <dt>SharePoint</dt><dd>{% if p.sharepoint_url %}<a href="{{ p.sharepoint_url }}" target="_blank" rel="noopener">Open folder</a>{% else %}—{% endif %}</dd>
+      <dt>Jira</dt><dd>{% if p.jira_url %}<a href="{{ p.jira_url }}" target="_blank" rel="noopener">Open Jira</a>{% else %}—{% endif %}</dd>
+      <dt>Description</dt><dd style="white-space:pre-line">{{ p.description or '—' }}</dd>
+    </dl>
+  </div>
+  <div class="panel">
+    <h2>Customer contacts <a class="btn small" href="{{ url_for('records.new', parent='customer', pid=p.customer_id, kind='contacts') }}">+ Contact</a></h2>
+    <div class="table-wrap"><table>
+      {% for c in p.customer.contacts %}
+      <tr>
+        <td><a href="{{ url_for('records.edit', kind='contacts', id=c.id) }}">{{ c.name }}</a>
+          {% if c.is_invoice_contact %}<span class="badge sent">invoice contact</span>{% endif %}
+          <div class="muted small">{{ c.role or '' }}</div></td>
+        <td class="small">{% if c.email %}<a href="mailto:{{ c.email }}">{{ c.email }}</a>{% endif %}<br>{{ c.phone or '' }}</td>
+      </tr>
+      {% else %}<tr><td class="empty">No contacts for this customer yet.</td></tr>
+      {% endfor %}
+    </table></div>
+  </div>
+</div>
+
+<div class="panel" id="pre">
+  <h2>Pre-project checklist <a class="btn small" href="{{ url_for('projects.task_new', id=p.id, phase='pre') }}">+ Step</a></h2>
+  {{ task_table(p.tasks_in('pre')) }}
+</div>
+
+<div class="panel" id="tasks">
+  <h2>Project manager tasks <a class="btn small" href="{{ url_for('projects.task_new', id=p.id, phase='project') }}">+ Task</a></h2>
+  <p class="help" style="margin-top:-.4rem">Tasks with the same step number can run in parallel. "Ready" means all prerequisites are done.
+    Dependencies come from the template in Settings and can be changed per task here.</p>
+  {{ task_table(p.tasks_in('project')) }}
+</div>
+
+<div class="panel" id="contracts">
+  <h2>Contracts <a class="btn small" href="{{ url_for('records.new', parent='project', pid=p.id, kind='contracts') }}">+ Contract</a></h2>
+  <div class="table-wrap"><table>
+    <tr><th>Reference</th><th>Signed</th><th>Period</th><th class="num">Man-days</th><th class="num">Rate</th><th class="num">Value</th><th>Scope</th><th>SharePoint</th></tr>
+    {% for c in p.contracts %}
+    <tr>
+      <td><a href="{{ url_for('records.edit', kind='contracts', id=c.id) }}">{{ c }}</a></td>
+      <td class="small">{{ c.signed_date|d }}</td>
+      <td class="small">{{ c.start_date|d }}{% if c.end_date %} – {{ c.end_date|d }}{% endif %}</td>
+      <td class="num">{{ c.effort_man_days|num }}</td>
+      <td class="num">{{ c.man_day_rate|money(c.currency) }}</td>
+      <td class="num">{{ c.total_value|money(c.currency) }}{% if c.fixed_price is not none %}<div class="muted small">fixed price</div>{% endif %}</td>
+      <td class="small" style="white-space:pre-line">{{ (c.scope or '')|truncate(200) }}{% if c.payment_terms %}<div class="muted">Terms: {{ c.payment_terms }}</div>{% endif %}</td>
+      <td>{% if c.sharepoint_url %}<a href="{{ c.sharepoint_url }}" target="_blank" rel="noopener">Open</a>{% else %}<span class="badge waiting">not uploaded</span>{% endif %}</td>
+    </tr>
+    {% else %}<tr><td colspan="8" class="empty">No contract recorded yet.</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+
+<div class="panel" id="cmos">
+  <h2>CMOs / partners <a class="btn small" href="{{ url_for('records.new', parent='project', pid=p.id, kind='cmos') }}">+ CMO</a></h2>
+  <div class="table-wrap"><table>
+    <tr><th>Name</th><th>Site</th><th>Identifier</th><th>Contact</th><th>INT</th><th>PROD</th></tr>
+    {% for c in p.cmos %}
+    <tr>
+      <td><a href="{{ url_for('records.edit', kind='cmos', id=c.id) }}">{{ c.name }}</a></td>
+      <td class="small">{{ c.location or '' }}</td>
+      <td class="small">{{ c.identifier or '' }}</td>
+      <td class="small">{{ c.contact_name or '' }}{% if c.contact_email %}<br><a href="mailto:{{ c.contact_email }}">{{ c.contact_email }}</a>{% endif %}</td>
+      <td>{{ badge(c.int_status, label(M.ONBOARDING_STATUSES, c.int_status)) }}</td>
+      <td>{{ badge(c.prod_status, label(M.ONBOARDING_STATUSES, c.prod_status)) }}</td>
+    </tr>
+    {% else %}<tr><td colspan="6" class="empty">No CMOs yet.</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+
+<div class="panel" id="serials">
+  <h2>Serial numbers <a class="btn small" href="{{ url_for('records.new', parent='project', pid=p.id, kind='serials') }}">+ Serial number</a></h2>
+  <div class="table-wrap"><table>
+    <tr><th>Serial number</th><th>Description</th><th>Environment</th><th>Issued</th></tr>
+    {% for s in p.serials %}
+    <tr>
+      <td><a href="{{ url_for('records.edit', kind='serials', id=s.id) }}">{{ s.serial }}</a></td>
+      <td class="small">{{ s.description or '' }}</td>
+      <td>{{ s.environment or '' }}</td>
+      <td class="small">{{ s.issued_date|d }}</td>
+    </tr>
+    {% else %}<tr><td colspan="4" class="empty">No serial numbers yet.</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+
+<div class="panel" id="invoices">
+  <h2>Invoices and credit notes <a class="btn small" href="{{ url_for('records.new', parent='project', pid=p.id, kind='invoices') }}">+ Invoice / credit note</a></h2>
+  {% set cur = p.currency %}
+  <div class="money-summary">
+    <div><div class="k">Contract value</div><div class="v">{{ p.contract_value|money(cur) }}</div></div>
+    <div><div class="k">Invoiced</div><div class="v">{{ p.invoiced_amount|money(cur) }}</div></div>
+    <div><div class="k">Credit notes</div><div class="v">{{ p.credited_amount|money(cur) }}</div></div>
+    <div><div class="k">Net invoiced</div><div class="v">{{ p.net_invoiced|money(cur) }}</div></div>
+    <div><div class="k">Paid</div><div class="v">{{ p.paid_amount|money(cur) }}</div></div>
+    <div><div class="k">Remaining to invoice</div><div class="v">{{ p.remaining_to_invoice|money(cur) }}</div></div>
+  </div>
+  <p class="help">Totals count invoices that are issued, sent or paid. Planned invoices are listed but not counted.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Type</th><th>Number</th><th>Description</th><th>Issue date</th><th>Due</th><th class="num">Man-days</th><th class="num">Amount</th><th>Status</th></tr>
+    {% for i in p.invoices %}
+    <tr>
+      <td>{{ badge(i.kind, i.kind_label) }}</td>
+      <td><a href="{{ url_for('records.edit', kind='invoices', id=i.id) }}">{{ i.number or '(no number)' }}</a>
+        {% if i.related_invoice %}<div class="muted small">for {{ i.related_invoice }}</div>{% endif %}</td>
+      <td class="small">{{ i.description or '' }}</td>
+      <td class="small">{{ i.issue_date|d }}</td>
+      <td class="small">{{ i.due_date|d }}</td>
+      <td class="num">{{ i.man_days|num }}</td>
+      <td class="num">{{ i.signed_amount|money(i.currency) }}</td>
+      <td>{{ badge('overdue' if i.is_overdue else i.status, 'Overdue' if i.is_overdue else i.status_label) }}{% if i.paid_date %}<div class="muted small">paid {{ i.paid_date|d }}</div>{% endif %}</td>
+    </tr>
+    {% else %}<tr><td colspan="8" class="empty">No invoices yet. Add planned invoices (e.g. per milestone) to get reminders on the dashboard.</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+
+<div class="panel" id="files">
+  <h2>Files</h2>
+  <form method="post" enctype="multipart/form-data" action="{{ url_for('projects.file_upload', id=p.id) }}" class="filters">
+    {{ csrf() }}
+    <input type="file" name="file" required>
+    <select name="category">{% for v, n in categories %}<option value="{{ v }}">{{ n }}</option>{% endfor %}</select>
+    <input type="text" name="description" placeholder="Description (optional)" style="max-width:280px">
+    <button class="primary" type="submit">Upload</button>
+  </form>
+  <div class="table-wrap"><table>
+    {% for a in p.attachments %}
+    <tr>
+      <td><a href="{{ url_for('projects.file_download', id=a.id) }}">{{ a.original_name }}</a><div class="muted small">{{ a.description or '' }}</div></td>
+      <td>{{ badge('', label(categories, a.category)) }}</td>
+      <td class="small muted">{{ a.uploaded_by.display_name if a.uploaded_by else '' }} · {{ a.uploaded_at|dt }} · {{ ((a.size or 0) / 1024)|round(0)|int }} KB</td>
+      <td>{{ delete_button(url_for('projects.file_delete', id=a.id), 'Delete', 'Delete this file? This cannot be undone.') }}</td>
+    </tr>
+    {% else %}<tr><td class="empty">No files yet. You can keep a copy of the contract here as well as on SharePoint.</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+
+<div class="panel" id="notes">
+  <h2>Notes and follow-up</h2>
+  <form method="post" action="{{ url_for('projects.note_add', id=p.id) }}">
+    {{ csrf() }}
+    <textarea name="body" placeholder="Meeting notes, decisions, follow-up..." required></textarea>
+    <div style="margin-top:.5rem"><button class="primary" type="submit">Add note</button></div>
+  </form>
+  <div style="margin-top:1rem">
+  {% for n in p.notes %}
+    <div class="note">{{ n.body }}<div class="muted small">{{ n.user.display_name if n.user else '' }} · {{ n.created_at|dt }}
+      {% if n.user_id == current_user.id or current_user.is_admin %}
+        <form class="inline" method="post" action="{{ url_for('projects.note_delete', id=n.id) }}" onsubmit="return confirm('Delete this note?')">{{ csrf() }}<button class="link small">delete</button></form>
+      {% endif %}</div></div>
+  {% else %}<div class="empty">No notes yet.</div>
+  {% endfor %}
+  </div>
+</div>
+
+<div class="panel" id="history">
+  <h2>History <a class="small" href="{{ url_for('projects.history', id=p.id) }}">Full history</a></h2>
+  {{ history_list(history) }}
+</div>
+{% endblock %}

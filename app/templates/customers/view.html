@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import badge, history_list %}
+{% block title %}{{ customer.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ customer.name }}</h1><div class="muted">{{ customer.country or '' }}</div></div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('customers.edit', id=customer.id) }}">Edit customer</a>
+    <a class="btn primary" href="{{ url_for('projects.new', customer_id=customer.id) }}">+ New project</a>
+  </div>
+</div>
+<div class="grid two">
+  <div class="panel">
+    <h2>Details</h2>
+    <dl class="kv">
+      <dt>VAT number</dt><dd>{{ customer.vat_number or '—' }}</dd>
+      <dt>Website</dt><dd>{% if customer.website %}<a href="{{ customer.website }}" target="_blank" rel="noopener">{{ customer.website }}</a>{% else %}—{% endif %}</dd>
+      <dt>Address</dt><dd style="white-space:pre-line">{{ customer.address or '—' }}</dd>
+      <dt>Notes</dt><dd style="white-space:pre-line">{{ customer.notes or '—' }}</dd>
+    </dl>
+  </div>
+  <div class="panel" id="contacts">
+    <h2>Contacts <a class="btn small" href="{{ url_for('records.new', parent='customer', pid=customer.id, kind='contacts') }}">+ Contact</a></h2>
+    <div class="table-wrap"><table>
+      {% for c in customer.contacts %}
+      <tr>
+        <td><a href="{{ url_for('records.edit', kind='contacts', id=c.id) }}">{{ c.name }}</a>
+          {% if c.is_invoice_contact %}<span class="badge sent">invoice contact</span>{% endif %}
+          <div class="muted small">{{ c.role or '' }}</div></td>
+        <td class="small">{% if c.email %}<a href="mailto:{{ c.email }}">{{ c.email }}</a>{% endif %}<br>{{ c.phone or '' }}</td>
+      </tr>
+      {% else %}<tr><td class="empty">No contacts yet. Add the main and invoice contacts.</td></tr>
+      {% endfor %}
+    </table></div>
+  </div>
+</div>
+<div class="panel">
+  <h2>Projects</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Project</th><th>Product</th><th>Status</th><th>Progress</th><th class="num">Contract value</th><th class="num">Net invoiced</th></tr>
+    {% for p in customer.projects %}
+    <tr>
+      <td><a href="{{ url_for('projects.view', id=p.id) }}">{{ p.name }}</a></td>
+      <td>{{ p.template.name if p.template else '' }}</td>
+      <td>{{ badge(p.status, p.status_label) }}</td>
+      <td style="min-width:110px"><div class="progress"><span style="width:{{ p.progress }}%"></span></div><span class="small muted">{{ p.progress }}%</span></td>
+      <td class="num">{{ p.contract_value|money(p.currency) }}</td>
+      <td class="num">{{ p.net_invoiced|money(p.currency) }}</td>
+    </tr>
+    {% else %}<tr><td colspan="6" class="empty">No projects yet.</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+<div class="panel"><h2>History</h2>{{ history_list(history) }}</div>
+{% endblock %}

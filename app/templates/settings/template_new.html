@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import fields as render_fields, errors_box, csrf %}
+{% block title %}New template{% endblock %}
+{% block content %}
+<div class="page-head"><h1>New project template</h1></div>
+<div class="panel">
+  {{ errors_box(errors) }}
+  <form method="post">
+    {{ csrf() }}
+    {{ render_fields(fields, obj, submitted) }}
+    <p><label class="lbl" for="copy_from">Start from a copy of</label>
+      <select id="copy_from" name="copy_from" style="max-width:360px"><option value="">Empty template</option>
+        {% for t in templates %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}</select></p>
+    <div class="form-actions"><div class="actions"><button class="primary" type="submit">Create</button><a class="btn" href="{{ url_for('settings.index') }}">Cancel</a></div></div>
+  </form>
+</div>
+{% endblock %}
