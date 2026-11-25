@@ -133,3 +133,84 @@ def changes_filter(raw):
         return json.loads(raw or "{}")
     except ValueError:
         return {}
+
+
+@bp.get("/analytics")
+def analytics():
+    from collections import Counter, defaultdict
+    from decimal import Decimal
+
+    from ..models import PROJECT_STATUSES, ProjectTemplate
+
+    template_id = request.args.get("template_id", type=int)
+    pq = Project.query.join(Customer)
+    if template_id:
+        pq = pq.filter(Project.template_id == template_id)
+    projects = pq.order_by(Customer.name, Project.name).all()
+    open_projects = [p for p in projects if p.is_open]
+
+    status_counts = Counter(p.status for p in projects)
+    by_status = [(v, t, status_counts.get(v, 0)) for v, t in PROJECT_STATUSES]
+    product_counts = Counter(p.template.name if p.template else "No template" for p in open_projects)
+
+    money = defaultdict(lambda: defaultdict(Decimal))
+    for p in projects:
+        if p.status == "cancelled":
+            continue
+        m = money[p.currency]
+        m["contract"] += p.contract_value
+        m["net_invoiced"] += p.net_invoiced
+        m["paid"] += p.paid_amount
+        if p.is_open:
+            m["remaining"] += p.remaining_to_invoice
+    project_ids = {p.id for p in projects}
+    invoices = [i for i in Invoice.query.all() if i.project_id in project_ids]
+    for i in invoices:
+        if i.status in ("issued", "sent"):
+            money[i.currency or "EUR"]["outstanding"] += i.signed_amount
+        if i.status in ("planned", "to_issue"):
+            money[i.currency or "EUR"]["planned"] += i.signed_amount
+    main_currency = max(money, key=lambda c: money[c]["contract"]) if money else "EUR"
+
+    # net invoiced per month, last 12 months, main currency
+    today = date.today()
+    months = []
+    y, mth = today.year, today.month
+    for _ in range(12):
+        months.append((y, mth))
+        mth -= 1
+        if mth == 0:
+            y, mth = y - 1, 12
+    months.reverse()
+    per_month = {k: Decimal(0) for k in months}
+    for i in invoices:
+        if i.issue_date and i.status in ("issued", "sent", "paid") and (i.currency or "EUR") == main_currency:
+            k = (i.issue_date.year, i.issue_date.month)
+            if k in per_month:
+                per_month[k] += i.signed_amount
+    month_max = max([v for v in per_month.values()] + [Decimal(1)])
+    monthly = [(date(y, m, 1), v) for (y, m), v in per_month.items()]
+
+    # open tasks per person
+    open_ids = [p.id for p in open_projects] or [-1]
+    tasks = ProjectTask.query.filter(ProjectTask.project_id.in_(open_ids),
+                                     ProjectTask.status.notin_(("done", "na"))).all()
+    load = Counter(t.assignee.display_name if t.assignee else "Unassigned" for t in tasks)
+    overdue_by = Counter(t.assignee.display_name if t.assignee else "Unassigned" for t in tasks if t.is_overdue)
+    workload = sorted(((n, c, overdue_by.get(n, 0)) for n, c in load.items()), key=lambda x: -x[1])
+
+    horizon = today + timedelta(days=90)
+    go_lives = sorted(
+        [p for p in open_projects if p.target_go_live and not p.go_live_date and p.target_go_live <= horizon],
+        key=lambda p: p.target_go_live,
+    )
+    done_tasks = ProjectTask.query.filter(ProjectTask.project_id.in_(open_ids), ProjectTask.status == "done").count()
+    all_tasks = ProjectTask.query.filter(ProjectTask.project_id.in_(open_ids), ProjectTask.status != "na").count()
+
+    return render_template(
+        "main/analytics.html", projects=projects, open_projects=open_projects, by_status=by_status,
+        product_counts=product_counts.most_common(), money=money, main_currency=main_currency,
+        monthly=monthly, month_max=month_max, workload=workload, go_lives=go_lives,
+        task_pct=round(100 * done_tasks / all_tasks) if all_tasks else 0, open_task_count=len(tasks),
+        templates=ProjectTemplate.query.order_by(ProjectTemplate.name).all(), template_id=template_id,
+    )

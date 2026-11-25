@@ -11,7 +11,7 @@
     <p><label class="lbl" for="copy_from">Start from a copy of</label>
       <select id="copy_from" name="copy_from" style="max-width:360px"><option value="">Empty template</option>
         {% for t in templates %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}</select></p>
-    <div class="form-actions"><div class="actions"><button class="primary" type="submit">Create</button><a class="btn" href="{{ url_for('settings.index') }}">Cancel</a></div></div>
+    <div class="form-actions"><div class="actions"><button class="primary" type="submit">Create</button><a class="btn" href="{{ url_for('settings.templates') }}">Cancel</a></div></div>
   </form>
 </div>
 {% endblock %}

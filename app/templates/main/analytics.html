@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import badge %}
+{% block title %}Overall View{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Overall View</h1><div class="muted">Portfolio analytics across all customers and projects</div></div>
+  <form class="filters" method="get" style="margin:0">
+    <select name="template_id" onchange="this.form.submit()">
+      <option value="">All products</option>
+      {% for t in templates %}<option value="{{ t.id }}" {{ 'selected' if template_id == t.id }}>{{ t.name }}</option>{% endfor %}
+    </select>
+    <noscript><button type="submit">Filter</button></noscript>
+  </form>
+</div>
+
+{% set m = money[main_currency] if main_currency in money else {} %}
+<div class="stats">
+  <div class="stat"><div class="v">{{ open_projects|length }}</div><div class="k">Open projects (of {{ projects|length }})</div></div>
+  <div class="stat"><div class="v">{{ task_pct }}%</div><div class="k">Tasks done in open projects</div></div>
+  <div class="stat"><div class="v">{{ open_task_count }}</div><div class="k">Open tasks</div></div>
+  <div class="stat"><div class="v">{{ go_lives|length }}</div><div class="k">Go-lives in next 90 days</div></div>
+</div>
+
+<div class="panel">
+  <h2>Money</h2>
+  {% for cur, v in money.items() %}
+  <div class="money-summary">
+    <div><div class="k">Contract value ({{ cur }})</div><div class="v">{{ v.contract|money(cur) }}</div></div>
+    <div><div class="k">Net invoiced</div><div class="v">{{ v.net_invoiced|money(cur) }}</div></div>
+    <div><div class="k">Paid</div><div class="v">{{ v.paid|money(cur) }}</div></div>
+    <div><div class="k">Awaiting payment</div><div class="v">{{ v.outstanding|money(cur) }}</div></div>
+    <div><div class="k">Planned invoices</div><div class="v">{{ v.planned|money(cur) }}</div></div>
+    <div><div class="k">Left to invoice (open projects)</div><div class="v">{{ v.remaining|money(cur) }}</div></div>
+  </div>
+  {% else %}<div class="empty">No contracts or invoices yet.</div>
+  {% endfor %}
+  <p class="help">Excludes cancelled projects. "Net invoiced" = issued, sent and paid invoices minus credit notes.</p>
+</div>
+
+<div class="grid two">
+  <div class="panel">
+    <h2>Net invoiced per month ({{ main_currency }})</h2>
+    <div class="vbars" role="img" aria-label="Net invoiced per month, last 12 months">
+      {% for d, v in monthly %}
+      {% set h = ((v if v > 0 else 0) / month_max * 100)|round(1) %}
+      <div class="col"><div class="tip">{{ d.strftime('%b %Y') }}: {{ v|money(main_currency) }}</div><span style="height:{{ h }}%"></span></div>
+      {% endfor %}
+    </div>
+    <div class="vlabels">{% for d, v in monthly %}<div>{{ d.strftime('%b') }}</div>{% endfor %}</div>
+    <details style="margin-top:.6rem"><summary class="small muted">Show as table</summary>
+      <table>{% for d, v in monthly %}<tr><td>{{ d.strftime('%B %Y') }}</td><td class="num">{{ v|money(main_currency) }}</td></tr>{% endfor %}</table>
+    </details>
+  </div>
+
+  <div class="panel">
+    <h2>Projects by status</h2>
+    {% set smax = (by_status|map(attribute=2)|max) or 1 %}
+    <div class="hbars">
+      {% for v, t, c in by_status %}
+      <div class="lbl">{{ t }}</div><div class="bar" title="{{ t }}: {{ c }}"><span style="width:{{ (c / smax * 100)|round(1) }}%"></span></div><div class="val">{{ c }}</div>
+      {% endfor %}
+    </div>
+    <h3>Open projects by product</h3>
+    {% if product_counts %}
+    {% set pmax = product_counts[0][1] %}
+    <div class="hbars">
+      {% for name, c in product_counts %}
+      <div class="lbl">{{ name }}</div><div class="bar" title="{{ name }}: {{ c }}"><span style="width:{{ (c / pmax * 100)|round(1) }}%"></span></div><div class="val">{{ c }}</div>
+      {% endfor %}
+    </div>
+    {% else %}<div class="empty">No open projects.</div>{% endif %}
+  </div>
+
+  <div class="panel">
+    <h2>Open tasks per person</h2>
+    {% if workload %}
+    {% set wmax = workload[0][1] %}
+    <div class="hbars">
+      {% for name, c, od in workload %}
+      <div class="lbl">{{ name }}</div>
+      <div class="bar" title="{{ name }}: {{ c }} open, {{ od }} overdue"><span style="width:{{ (c / wmax * 100)|round(1) }}%"></span></div>
+      <div class="val">{{ c }}{% if od %} <span class="badge overdue">{{ od }} overdue</span>{% endif %}</div>
+      {% endfor %}
+    </div>
+    {% else %}<div class="empty">No open tasks.</div>{% endif %}
+  </div>
+
+  <div class="panel">
+    <h2>Upcoming go-lives (90 days)</h2>
+    <div class="table-wrap"><table>
+      {% for p in go_lives %}
+      <tr>
+        <td><a href="{{ url_for('projects.view', id=p.id) }}">{{ p.customer.name }}</a><div class="muted small">{{ p.name }}</div></td>
+        <td class="small">{{ p.target_go_live|d }}{% if p.target_go_live < today %} <span class="badge overdue">late</span>{% endif %}</td>
+        <td style="min-width:100px"><div class="progress"><span style="width:{{ p.progress }}%"></span></div><span class="small muted">{{ p.progress }}%</span></td>
+      </tr>
+      {% else %}<tr><td class="empty">No go-lives planned in the next 90 days.</td></tr>
+      {% endfor %}
+    </table></div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>All projects</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Customer / project</th><th>Product</th><th>Status</th><th>PM</th><th>Target go-live</th><th>Progress</th>
+      <th class="num">Contract</th><th class="num">Net invoiced</th><th class="num">% invoiced</th><th class="num">Left to invoice</th></tr>
+    {% for p in projects %}
+    <tr>
+      <td><a href="{{ url_for('projects.view', id=p.id) }}">{{ p.customer.name }}</a><div class="muted small">{{ p.name }}</div></td>
+      <td class="small">{{ p.template.name if p.template else '' }}</td>
+      <td>{{ badge(p.status, p.status_label) }}</td>
+      <td class="small">{{ p.project_manager.display_name if p.project_manager else '' }}</td>
+      <td class="small">{{ p.target_go_live|d }}</td>
+      <td style="min-width:100px"><div class="progress"><span style="width:{{ p.progress }}%"></span></div><span class="small muted">{{ p.progress }}%</span></td>
+      <td class="num">{{ p.contract_value|money(p.currency) }}</td>
+      <td class="num">{{ p.net_invoiced|money(p.currency) }}</td>
+      <td class="num">{% if p.contract_value %}{{ (p.net_invoiced / p.contract_value * 100)|round|int }}%{% endif %}</td>
+      <td class="num">{{ p.remaining_to_invoice|money(p.currency) }}</td>
+    </tr>
+    {% else %}<tr><td colspan="10" class="empty">No projects yet.</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endblock %}

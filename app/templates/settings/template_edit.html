@@ -2,7 +2,7 @@
 {% from '_macros.html' import fields as render_fields, errors_box, csrf, delete_button %}
 {% block title %}{{ tpl.name }}{% endblock %}
 {% block content %}
-<div class="page-head"><div><div class="muted"><a href="{{ url_for('settings.index') }}">Settings</a> · Project template</div><h1>{{ tpl.name }}</h1></div></div>
+<div class="page-head"><div><div class="muted"><a href="{{ url_for('settings.templates') }}">Project settings</a> · Template</div><h1>{{ tpl.name }}</h1></div></div>
 <div class="panel">
   {{ errors_box(errors) }}
   <form method="post">

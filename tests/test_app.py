@@ -37,7 +37,7 @@ def test_full_flow(client, app):
 
     # every page renders
     for url in ["/", "/customers/", f"/customers/{cid}", "/projects/", f"/projects/{pid}", "/invoices",
-                "/history", "/settings/", f"/projects/{pid}/history", "/invoices.csv", "/settings/password",
+                "/history", "/analytics", "/settings/templates", "/settings/users", f"/projects/{pid}/history", "/invoices.csv", "/settings/password",
                 f"/projects/tasks/{kickoff_id}/edit", f"/projects/{pid}/tasks/new", "/settings/users/new",
                 "/settings/templates/new"]:
         assert client.get(url).status_code == 200, url
@@ -131,3 +131,4 @@ def test_user_management(client, app):
     assert c2.get("/settings/users/new").status_code == 403
     assert c2.get("/settings/backup").status_code == 403
     assert client.get("/settings/backup").status_code == 200
+    assert client.get("/settings/").status_code == 302

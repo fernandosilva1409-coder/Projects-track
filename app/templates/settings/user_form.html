@@ -10,7 +10,7 @@
     {{ render_fields(fields, obj, submitted) }}
     <p style="max-width:360px"><label class="lbl" for="password">{{ 'New password (leave empty to keep)' if obj.id else 'Password *' }}</label>
       <input id="password" type="password" name="password" autocomplete="new-password" minlength="8"></p>
-    <div class="form-actions"><div class="actions"><button class="primary" type="submit">Save</button><a class="btn" href="{{ url_for('settings.index') }}#users">Cancel</a></div></div>
+    <div class="form-actions"><div class="actions"><button class="primary" type="submit">Save</button><a class="btn" href="{{ url_for('settings.users') }}">Cancel</a></div></div>
   </form>
   <p class="help">Users are never deleted, so their history stays readable. Untick "Active" to block a login.</p>
 </div>

@@ -45,11 +45,19 @@ def _require_admin():
 
 @bp.get("/")
 def index():
+    return redirect(url_for("settings.templates"))
+
+
+@bp.get("/templates")
+def templates():
     return render_template(
-        "settings/index.html",
-        templates=ProjectTemplate.query.order_by(ProjectTemplate.name).all(),
-        users=User.query.order_by(User.full_name).all(),
+        "settings/templates.html", templates=ProjectTemplate.query.order_by(ProjectTemplate.name).all(),
     )
+
+
+@bp.get("/users")
+def users():
+    return render_template("settings/users.html", users=User.query.order_by(User.full_name).all())
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +128,7 @@ def template_delete(id):
     db.session.delete(tpl)
     db.session.commit()
     flash("Template deleted.", "success")
-    return redirect(url_for("settings.index"))
+    return redirect(url_for("settings.templates"))
 
 
 @bp.post("/templates/<int:id>/arrange/<mode>")
@@ -243,7 +251,7 @@ def _user_form(user, heading):
             db.session.add(user)
             db.session.commit()
             flash("User saved.", "success")
-            return redirect(url_for("settings.index") + "#users")
+            return redirect(url_for("settings.users"))
     return render_template(
         "settings/user_form.html", fields=USER_FIELDS, obj=user, errors=errors, heading=heading,
         submitted=request.form if request.method == "POST" else None,

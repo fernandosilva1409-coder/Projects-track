@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import badge %}
+{% block title %}Project settings{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Project settings</h1><div class="muted">Templates, default tasks and their serial / parallel dependencies</div></div></div>
+<div class="panel" id="templates">
+  <h2>Project templates <a class="btn small" href="{{ url_for('settings.template_new') }}">+ Template</a></h2>
+  <p class="help" style="margin-top:-.4rem">A template defines the default pre-project steps and project tasks, and which tasks run in series or in parallel. New projects copy it; existing projects are not changed.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Template</th><th>Tasks</th><th>Status</th></tr>
+    {% for t in templates %}
+    <tr><td><a href="{{ url_for('settings.template_edit', id=t.id) }}">{{ t.name }}</a><div class="muted small">{{ t.description or '' }}</div></td>
+      <td>{{ t.tasks|length }}</td><td>{{ badge('active' if t.active else 'na', 'Active' if t.active else 'Inactive') }}</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endblock %}

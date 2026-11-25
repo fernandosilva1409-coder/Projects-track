@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import badge %}
+{% block title %}Users{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Users</h1></div>
+<div class="panel" id="users">
+  <h2>Users {% if current_user.is_admin %}<a class="btn small" href="{{ url_for('settings.user_new') }}">+ User</a>{% endif %}</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Name</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th></tr>
+    {% for u in users %}
+    <tr>
+      <td>{% if current_user.is_admin %}<a href="{{ url_for('settings.user_edit', id=u.id) }}">{{ u.display_name }}</a>{% else %}{{ u.display_name }}{% endif %}</td>
+      <td>{{ u.username }}</td><td>{{ u.email or '' }}</td>
+      <td>{{ 'Admin' if u.is_admin else 'User' }}</td>
+      <td>{{ badge('active' if u.active else 'na', 'Active' if u.active else 'Disabled') }}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+</div>
+<div class="panel">
+  <h2>My account</h2>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('settings.password') }}">Change my password</a>
+    {% if current_user.is_admin %}<a class="btn" href="{{ url_for('settings.backup') }}">Download database backup</a>{% endif %}
+  </div>
+  {% if current_user.is_admin %}<p class="help">The backup is a single SQLite file with all data (files uploaded to projects are not included).</p>{% endif %}
+</div>
+{% endblock %}
