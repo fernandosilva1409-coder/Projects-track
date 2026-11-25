@@ -16,9 +16,7 @@ def create_app(test_config=None):
     os.makedirs(data_dir, exist_ok=True)
 
     production = os.environ.get("APP_ENV") == "production"
-    secret = os.environ.get("SECRET_KEY")
-    if production and not secret:
-        raise RuntimeError("SECRET_KEY must be set in production")
+    secret = os.environ.get("SECRET_KEY") or (_persistent_secret(data_dir) if production else None)
 
     app.config.update(
         SECRET_KEY=secret or "dev-only-secret-change-me",
@@ -74,6 +72,20 @@ def create_app(test_config=None):
     return app
 
 
+def _persistent_secret(data_dir):
+    """No SECRET_KEY set: create one once and keep it on the data volume,
+    so logins survive restarts."""
+    import secrets
+
+    path = os.path.join(data_dir, ".secret_key")
+    if not os.path.exists(path):
+        with open(path, "w") as f:
+            f.write(secrets.token_hex(32))
+        os.chmod(path, 0o600)
+    with open(path) as f:
+        return f.read().strip()
+
+
 def register_template_helpers(app):
     from datetime import date
 
@@ -124,13 +136,24 @@ def register_cli(app):
         """Create default templates and the first admin (from env) if missing."""
         if seed_templates():
             click.echo("Default project templates created.")
-        username = os.environ.get("ADMIN_USERNAME")
+        if User.query.count():
+            return
+        import secrets
+
+        username = (os.environ.get("ADMIN_USERNAME") or "admin").lower()
         password = os.environ.get("ADMIN_PASSWORD")
-        if username and password and not User.query.count():
-            u = User(username=username, full_name=os.environ.get("ADMIN_NAME") or username, is_admin=True)
-            u.set_password(password)
-            db.session.add(u)
-            db.session.commit()
+        generated = not password
+        password = password or secrets.token_urlsafe(12)
+        u = User(username=username, full_name=os.environ.get("ADMIN_NAME") or username, is_admin=True)
+        u.set_password(password)
+        db.session.add(u)
+        db.session.commit()
+        if generated:
+            click.echo("=" * 60)
+            click.echo(f"First admin created. Username: {username}  Password: {password}")
+            click.echo("Log in and change it under Users > Change my password.")
+            click.echo("=" * 60)
+        else:
             click.echo(f"Admin user '{username}' created.")
 
     @app.cli.command("create-user")

@@ -1,6 +1,6 @@
 # Fly.io configuration. Change `app` to a unique name before the first deploy
 # (or let `fly launch --no-deploy --copy-config` do it for you).
-app = "project-tracker-csdb"
+app = "projects-track"
 primary_region = "mad"
 
 [build]

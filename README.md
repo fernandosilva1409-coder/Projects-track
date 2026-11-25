@@ -54,7 +54,9 @@ fly secrets set SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_he
 fly deploy
 ```
 
-The admin is created on first boot only (when there are no users). Log in, then add
+The admin is created on first boot only (when there are no users). If you skip the secrets,
+the app still starts: it creates its own `SECRET_KEY` on the volume and an `admin` user with a
+random password printed once in `fly logs`. Log in, then add
 Antonio and Jose in Settings > Users and remove `ADMIN_PASSWORD` with `fly secrets unset ADMIN_PASSWORD`.
 
 Later deploys: `fly deploy`. Database migrations run automatically on boot (`start.sh`).
