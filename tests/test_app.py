@@ -158,3 +158,45 @@ def test_budgets(client, app):
     page = client.get("/analytics?year=2026").data
     assert b"budget vs actual" in page and b"51" in page
     assert client.get(f"/customers/{cid}").status_code == 200
+
+
+def test_dependencies_block_and_status_sync(client, app):
+    _cid, pid = _create_project(client, app, "Platbricks Health Care Suite")
+    with app.app_context():
+        p = db.session.get(Project, pid)
+        pre = sorted(p.tasks_in("pre"), key=lambda t: t.position)
+        pre_ids = [t.id for t in pre]
+        kickoff_id = next(t.id for t in p.tasks if t.name == "Kick off")
+    # cannot complete a task whose prerequisites are open
+    client.post(f"/projects/tasks/{pre_ids[1]}/status", data={"status": "done"})
+    r = client.post(f"/projects/tasks/{kickoff_id}/edit", data={"name": "Kick off", "phase": "project",
+                                                               "status": "done", "depends_on": []})
+    with app.app_context():
+        assert db.session.get(ProjectTask, pre_ids[1]).status == "todo"
+    # but editing deps away in the same save is allowed
+    assert r.status_code == 302
+    # finishing the pre-project checklist moves the project to active
+    for tid in pre_ids:
+        client.post(f"/projects/tasks/{tid}/status", data={"status": "done"})
+    with app.app_context():
+        p = db.session.get(Project, pid)
+        assert all(t.status == "done" for t in p.tasks_in("pre"))
+        assert p.status == "active"
+
+
+def test_bulk_assign(client, app):
+    _cid, pid = _create_project(client, app)
+    with app.app_context():
+        from app.models import User
+        uid = User.query.first().id
+        ids = [t.id for t in db.session.get(Project, pid).tasks][:4]
+    r = client.post(f"/projects/{pid}/tasks/bulk", data={"task_ids": [str(i) for i in ids],
+                                                         "bulk_assignee_id": str(uid), "bulk_due_date": "2027-01-15"})
+    assert r.status_code == 302
+    with app.app_context():
+        for i in ids:
+            t = db.session.get(ProjectTask, i)
+            assert t.assignee_id == uid and t.due_date == date(2027, 1, 15)
+    client.post(f"/projects/{pid}/tasks/bulk", data={"task_ids": [str(ids[0])], "bulk_assignee_id": "none"})
+    with app.app_context():
+        assert db.session.get(ProjectTask, ids[0]).assignee_id is None

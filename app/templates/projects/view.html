@@ -4,9 +4,10 @@
 
 {% macro task_table(tasks) %}
 <div class="table-wrap"><table>
-  <tr><th title="Tasks with the same step can run in parallel">Step</th><th></th><th>Task</th><th>Assignee / status</th><th>Due</th><th>Done</th><th></th></tr>
+  <tr><th><input type="checkbox" title="Select all" aria-label="Select all" onclick="for (const c of this.closest('table').querySelectorAll('input[name=task_ids]')) c.checked = this.checked"></th><th title="Tasks with the same step can run in parallel">Step</th><th></th><th>Task</th><th style="min-width:300px">Assignee / status</th><th>Due</th><th>Done</th><th></th></tr>
   {% for t in tasks|sort(attribute='position') %}
   <tr id="task-{{ t.id }}" class="{{ 'finished' if t.is_finished }}">
+    <td><input type="checkbox" name="task_ids" value="{{ t.id }}" form="bulk-form" aria-label="Select {{ t.name }}"></td>
     <td><span class="step">{{ steps[t.id] }}</span></td>
     <td style="white-space:nowrap">
       <form class="inline" method="post" action="{{ url_for('projects.task_move', id=t.id, direction='up') }}">{{ csrf() }}<button class="link small" title="Move up">▲</button></form>
@@ -19,14 +20,15 @@
       {% if t.notes %}<div class="muted small" style="white-space:pre-line">{{ t.notes|truncate(160) }}</div>{% endif %}
     </td>
     <td>
-      <form method="post" action="{{ url_for('projects.task_status', id=t.id) }}" class="actions">
+      <form method="post" action="{{ url_for('projects.task_status', id=t.id) }}" class="actions" style="flex-wrap:nowrap">
         {{ csrf() }}
         <select class="compact" name="assignee_id" onchange="this.form.submit()">
           <option value="">Unassigned</option>
           {% for v, n in users %}<option value="{{ v }}" {{ 'selected' if t.assignee_id|string == v }}>{{ n }}</option>{% endfor %}
         </select>
         <select class="compact" name="status" onchange="this.form.submit()">
-          {% for v, n in M.TASK_STATUSES %}<option value="{{ v }}" {{ 'selected' if t.status == v }}>{{ n }}</option>{% endfor %}
+          {% set locked = t.waiting_on and not t.is_finished %}
+          {% for v, n in M.TASK_STATUSES %}<option value="{{ v }}" {{ 'selected' if t.status == v }} {{ 'disabled' if locked and v in ('in_progress', 'done') and t.status != v }}>{{ n }}{{ ' (waiting)' if locked and v in ('in_progress', 'done') and t.status != v }}</option>{% endfor %}
         </select>
         <noscript><button class="small">Save</button></noscript>
       </form>
@@ -35,7 +37,7 @@
     <td class="small">{{ t.completed_date|d }}</td>
     <td><a class="btn small" href="{{ url_for('projects.task_edit', id=t.id) }}">Edit</a></td>
   </tr>
-  {% else %}<tr><td colspan="7" class="empty">No tasks in this phase.</td></tr>
+  {% else %}<tr><td colspan="8" class="empty">No tasks in this phase.</td></tr>
   {% endfor %}
 </table></div>
 {% endmacro %}
@@ -88,9 +90,26 @@
   </div>
 </div>
 
+<form id="bulk-form" method="post" action="{{ url_for('projects.tasks_bulk', id=p.id) }}" class="panel bulk-bar">
+  {{ csrf() }}
+  <strong>Selected tasks:</strong>
+  <label class="small">Assign to
+    <select name="bulk_assignee_id" class="compact">
+      <option value="">— keep —</option><option value="none">Unassigned</option>
+      {% for v, n in users %}<option value="{{ v }}">{{ n }}</option>{% endfor %}
+    </select></label>
+  <label class="small">Due date <input type="date" name="bulk_due_date" class="compact"></label>
+  <button class="primary small" type="submit">Apply to selected</button>
+  <span class="help">Tick tasks in the lists below (or the header box to select a whole list).</span>
+</form>
+
+{% set pre = p.tasks_in('pre') %}
+{% set pre_done = pre|selectattr('is_finished')|list|length %}
 <div class="panel" id="pre">
-  <h2>Pre-project checklist <a class="btn small" href="{{ url_for('projects.task_new', id=p.id, phase='pre') }}">+ Step</a></h2>
-  {{ task_table(p.tasks_in('pre')) }}
+  <h2><span>Pre-project checklist
+      {% if pre and pre_done == pre|length %}{{ badge('done', 'Completed') }}{% else %}<span class="badge">{{ pre_done }}/{{ pre|length }} done</span>{% endif %}</span>
+    <a class="btn small" href="{{ url_for('projects.task_new', id=p.id, phase='pre') }}">+ Step</a></h2>
+  {{ task_table(pre) }}
 </div>
 
 <div class="panel" id="tasks">

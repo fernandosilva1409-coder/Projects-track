@@ -146,3 +146,28 @@ def budget_years(extra=()):
     years |= {y for (y,) in CustomerBudget.query.with_entities(CustomerBudget.year).distinct()}
     years |= {d.year for (d,) in Invoice.query.with_entities(Invoice.issue_date).filter(Invoice.issue_date.isnot(None))}
     return sorted(years, reverse=True)
+
+
+STARTED_STATUSES = ("in_progress", "done")
+
+
+def blocking_prerequisites(task, status, deps=None):
+    """Prerequisites that stop ``task`` from moving to ``status``."""
+    if status not in STARTED_STATUSES:
+        return []
+    deps = task.depends_on if deps is None else deps
+    return [d for d in deps if not d.is_finished]
+
+
+def sync_project_status(project):
+    """Move a project out of 'Pre-project' once its pre-project checklist is
+    finished (or project work has started). Returns the new status or None."""
+    if project.status != "pre_project":
+        return None
+    pre = project.tasks_in("pre")
+    pre_done = bool(pre) and all(t.is_finished for t in pre)
+    work_started = any(t.status in STARTED_STATUSES for t in project.tasks_in("project"))
+    if pre_done or work_started:
+        project.status = "active"
+        return "active"
+    return None

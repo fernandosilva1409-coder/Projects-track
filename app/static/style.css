@@ -154,3 +154,6 @@ select.compact, input.compact { width: auto; padding: .2rem .35rem; font-size: .
 .budget-bar .pl[style="width:0.0%"], .budget-bar .pl[style="width:0%"] { border-left: none; }
 .legend { display: flex; gap: 1rem; font-size: .82rem; color: var(--muted); align-items: center; flex-wrap: wrap; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: .3rem; vertical-align: -1px; }
+
+.bulk-bar { display: flex; gap: .8rem; align-items: center; flex-wrap: wrap; padding: .6rem 1rem; position: sticky; top: 2.6rem; z-index: 2; }
+.bulk-bar label { display: flex; gap: .35rem; align-items: center; }

@@ -136,6 +136,13 @@ def register_cli(app):
         """Create default templates and the first admin (from env) if missing."""
         if seed_templates():
             click.echo("Default project templates created.")
+        from .models import Project
+        from .services import sync_project_status
+
+        changed = [p for p in Project.query.filter_by(status="pre_project") if sync_project_status(p)]
+        if changed:
+            db.session.commit()
+            click.echo(f"{len(changed)} project(s) moved from Pre-project to Active.")
         if User.query.count():
             return
         import secrets

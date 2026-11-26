@@ -14,7 +14,10 @@ from ..models import (
     ATTACHMENT_CATEGORIES, OPEN_PROJECT_STATUSES, PROJECT_STATUSES, TASK_PHASES, TASK_STATUSES,
     Attachment, AuditLog, Customer, Note, Project, ProjectTask, ProjectTemplate,
 )
-from ..services import compute_steps, create_project_from_template, creates_cycle, renumber, user_choices
+from ..services import (
+    blocking_prerequisites, compute_steps, create_project_from_template, creates_cycle, sync_project_status,
+    user_choices,
+)
 
 bp = Blueprint("projects", __name__, url_prefix="/projects")
 
@@ -174,20 +177,66 @@ def _apply_status(task, status):
         task.completed_date = None
 
 
+def _after_task_change(project):
+    if sync_project_status(project):
+        flash("Pre-project checklist finished: project status changed to Active.", "success")
+
+
+def _blocked_message(task, blockers):
+    return f"'{task.name}' cannot start yet. Finish first: {', '.join(d.name for d in blockers)}."
+
+
 @bp.post("/tasks/<int:id>/status")
 def task_status(id):
     t = db.get_or_404(ProjectTask, id)
     status = request.form.get("status")
     if status not in dict(TASK_STATUSES):
         abort(400)
-    if status in ("in_progress", "done") and t.waiting_on:
-        flash(f"Note: '{t.name}' still waits on {', '.join(d.name for d in t.waiting_on)}.", "warning")
-    _apply_status(t, status)
+    blockers = blocking_prerequisites(t, status)
+    if blockers:
+        flash(_blocked_message(t, blockers), "error")
+    else:
+        _apply_status(t, status)
     if "assignee_id" in request.form:
         aid = request.form.get("assignee_id")
         t.assignee_id = int(aid) if aid else None
+    _after_task_change(t.project)
     db.session.commit()
     return redirect(url_for("projects.view", id=t.project_id) + f"#task-{t.id}")
+
+
+@bp.post("/<int:id>/tasks/bulk")
+def tasks_bulk(id):
+    """Assign several tasks at once (and optionally set a due date)."""
+    p = db.get_or_404(Project, id)
+    ids = {int(x) for x in request.form.getlist("task_ids") if x.isdigit()}
+    tasks = [t for t in p.tasks if t.id in ids]
+    if not tasks:
+        flash("Select at least one task.", "error")
+        return redirect(url_for("projects.view", id=id) + "#tasks")
+    aid = request.form.get("bulk_assignee_id", "")
+    valid_users = {v for v, _ in user_choices()}
+    if aid and aid not in valid_users and aid != "none":
+        abort(400)
+    due_raw = (request.form.get("bulk_due_date") or "").strip()
+    due = None
+    if due_raw:
+        try:
+            due = date.fromisoformat(due_raw)
+        except ValueError:
+            flash("Invalid due date.", "error")
+            return redirect(url_for("projects.view", id=id) + "#tasks")
+    if not aid and not due:
+        flash("Choose a person and/or a due date to apply.", "error")
+        return redirect(url_for("projects.view", id=id) + "#tasks")
+    for t in tasks:
+        if aid:
+            t.assignee_id = None if aid == "none" else int(aid)
+        if due:
+            t.due_date = due
+    db.session.commit()
+    flash(f"{len(tasks)} task(s) updated.", "success")
+    return redirect(url_for("projects.view", id=id) + "#tasks")
 
 
 def _task_form(project, task, heading, delete_url=None):
@@ -200,12 +249,18 @@ def _task_form(project, task, heading, delete_url=None):
         deps = [o for o in others if o.id in dep_ids]
         if not errors and task.id and creates_cycle(task, deps):
             errors.append("Those prerequisites would create a loop (a task waiting on itself).")
+        if not errors and task.status != old_status:
+            blockers = blocking_prerequisites(task, task.status, deps)
+            if blockers:
+                errors.append(_blocked_message(task, blockers))
         if errors:
             db.session.rollback()
         else:
             if task.status != old_status and task.completed_date == old_completed:
                 _apply_status(task, task.status)
             task.depends_on = deps
+            if task.id:
+                _after_task_change(project)
             if not task.id:
                 task.project_id = project.id
                 task.position = max((o.position for o in others), default=0) + 1
