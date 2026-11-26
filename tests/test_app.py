@@ -249,7 +249,8 @@ def test_add_customers_command(app):
             p = c.projects[0]
             open_tasks = [t.name for t in p.tasks if t.status != "done"]
             assert open_tasks == ["Jira and project finalization handover"]
-            assert p.status == "active" and p.project_manager.username == "fernando"
+            assert p.status == "live" and p.project_manager.username == "fernando"
+            assert p.go_live_date is not None
 
 
 def test_import_customers_page(client, app):
@@ -266,3 +267,40 @@ def test_import_customers_page(client, app):
         assert Customer.query.count() == 2
         for c in Customer.query.all():
             assert [t.name for t in c.projects[0].tasks if t.status != "done"] == ["Jira and project finalization handover"]
+
+
+def test_project_status_lifecycle(client, app):
+    _cid, pid = _create_project(client, app, "Platbricks Health Care Suite")
+    with app.app_context():
+        p = db.session.get(Project, pid)
+        assert p.status == "pre_project"
+        ordered = sorted(p.tasks, key=lambda t: (t.phase != "pre", t.position))
+        ids = [t.id for t in ordered]
+        golive = next(i for t, i in zip(ordered, ids) if "Go Live" in t.name)
+    # cannot close with open tasks
+    r = client.post(f"/projects/{pid}/status", data={"status": "closed"}, follow_redirects=True)
+    assert b"Cannot close" in r.data
+    # on hold is manual and sticky
+    client.post(f"/projects/{pid}/status", data={"status": "on_hold"})
+    client.post(f"/projects/tasks/{ids[0]}/status", data={"status": "done"})
+    with app.app_context():
+        assert db.session.get(Project, pid).status == "on_hold"
+    client.post(f"/projects/{pid}/status", data={"status": "auto"})
+    # complete tasks in order: pre -> active -> live -> closed
+    for i in ids[1:]:
+        client.post(f"/projects/tasks/{i}/status", data={"status": "done"})
+        with app.app_context():
+            p = db.session.get(Project, pid)
+            if i == ids[3]:
+                assert p.status == "active"
+            if i == golive:
+                assert p.status == "live" and p.go_live_date
+    with app.app_context():
+        assert db.session.get(Project, pid).status == "closed"
+    # reopening a task reopens the project
+    client.post(f"/projects/tasks/{ids[-1]}/status", data={"status": "todo"})
+    with app.app_context():
+        assert db.session.get(Project, pid).status == "live"
+    # edit form also refuses Closed with open tasks
+    r = client.post(f"/projects/{pid}/edit", data={"customer_id": str(_cid), "name": "X", "status": "closed"})
+    assert r.status_code == 200 and b"Cannot close" in r.data

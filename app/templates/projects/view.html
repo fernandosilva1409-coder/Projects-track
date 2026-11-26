@@ -50,6 +50,18 @@
   </div>
   <div class="actions">
     <div style="min-width:160px"><div class="progress"><span style="width:{{ p.progress }}%"></span></div><div class="small muted">{{ p.progress }}% of tasks done</div></div>
+    <form method="post" action="{{ url_for('projects.set_status', id=p.id) }}" class="actions" style="flex-wrap:nowrap">
+      {{ csrf() }}
+      <label class="small muted" for="status-select">Status</label>
+      <select id="status-select" name="status" class="compact" onchange="this.form.submit()">
+        {% set manual = p.status in ('on_hold', 'cancelled') %}
+        <option value="auto" {{ 'selected' if not manual }}>Automatic{% if not manual %}: {{ p.status_label }}{% endif %}</option>
+        <option value="on_hold" {{ 'selected' if p.status == 'on_hold' }}>On hold</option>
+        <option value="cancelled" {{ 'selected' if p.status == 'cancelled' }}>Cancelled</option>
+        {% if p.status != 'closed' %}<option value="closed">Close project</option>{% endif %}
+      </select>
+      <noscript><button class="small">Set</button></noscript>
+    </form>
     <a class="btn" href="{{ url_for('projects.edit', id=p.id) }}">Edit project</a>
   </div>
 </div>

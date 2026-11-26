@@ -139,10 +139,10 @@ def register_cli(app):
         from .models import Project
         from .services import sync_project_status
 
-        changed = [p for p in Project.query.filter_by(status="pre_project") if sync_project_status(p)]
+        changed = [p for p in Project.query.all() if sync_project_status(p)]
         if changed:
             db.session.commit()
-            click.echo(f"{len(changed)} project(s) moved from Pre-project to Active.")
+            click.echo(f"Status updated for {len(changed)} project(s).")
         if User.query.count():
             return
         import secrets

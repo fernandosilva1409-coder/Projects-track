@@ -15,7 +15,7 @@ from ..models import (
     Attachment, AuditLog, Customer, Note, Project, ProjectTask, ProjectTemplate,
 )
 from ..services import (
-    blocking_prerequisites, compute_steps, create_project_from_template, creates_cycle, sync_project_status,
+    blocking_prerequisites, compute_steps, create_project_from_template, creates_cycle, set_status_manually, sync_project_status,
     user_choices,
 )
 
@@ -33,7 +33,8 @@ def _template_choices(ctx=None):
 DETAIL_FIELDS = [
     Field("customer_id", "Customer", "fk", required=True, choices=_customer_choices),
     Field("name", "Project name", required=True),
-    Field("status", "Status", "select", required=True, choices=PROJECT_STATUSES),
+    Field("status", "Status", "select", required=True, choices=PROJECT_STATUSES,
+          help="Follows the tasks automatically. Choose On hold or Cancelled to override; Closed only when all tasks are done."),
     Field("project_manager_id", "Project manager", "fk", choices=user_choices),
     Field("start_date", "Start date", "date"),
     Field("target_go_live", "Target go-live", "date"),
@@ -130,8 +131,17 @@ def edit(id):
     p = db.get_or_404(Project, id)
     errors = []
     if request.method == "POST":
+        old_status = p.status
         errors = apply_form(p, DETAIL_FIELDS, request.form)
         if not errors:
+            wanted = p.status
+            p.status = old_status
+            errors = set_status_manually(p, wanted)
+            if not errors:
+                sync_project_status(p)
+        if errors:
+            db.session.rollback()
+        else:
             db.session.commit()
             flash("Project saved.", "success")
             return redirect(url_for("projects.view", id=id))
@@ -142,6 +152,23 @@ def edit(id):
         delete_url=url_for("projects.delete", id=id) if current_user.is_admin else None,
         delete_warning="This deletes the project with all its tasks, contracts, invoices and files.",
     )
+
+
+@bp.post("/<int:id>/status")
+def set_status(id):
+    p = db.get_or_404(Project, id)
+    status = request.form.get("status")
+    if status not in dict(PROJECT_STATUSES) and status != "auto":
+        abort(400)
+    errors = set_status_manually(p, status)
+    if errors:
+        for e in errors:
+            flash(e, "error")
+        db.session.rollback()
+    else:
+        db.session.commit()
+        flash(f"Project status: {p.status_label}.", "success")
+    return redirect(url_for("projects.view", id=id))
 
 
 @bp.post("/<int:id>/delete")
@@ -178,8 +205,9 @@ def _apply_status(task, status):
 
 
 def _after_task_change(project):
-    if sync_project_status(project):
-        flash("Pre-project checklist finished: project status changed to Active.", "success")
+    new = sync_project_status(project)
+    if new:
+        flash(f"Project status changed to {project.status_label}.", "success")
 
 
 def _blocked_message(task, blockers):

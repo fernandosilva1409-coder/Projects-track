@@ -159,18 +159,63 @@ def blocking_prerequisites(task, status, deps=None):
     return [d for d in deps if not d.is_finished]
 
 
-def sync_project_status(project):
-    """Move a project out of 'Pre-project' once its pre-project checklist is
-    finished (or project work has started). Returns the new status or None."""
-    if project.status != "pre_project":
-        return None
+MANUAL_STATUSES = ("on_hold", "cancelled")  # set by people, never changed automatically
+
+
+def is_go_live_task(task):
+    n = task.name.lower().replace("-", " ")
+    return "go live" in n or "golive" in n
+
+
+def computed_status(project):
+    """Status that follows from the tasks:
+    - Pre-project: pre-project checklist open and no project task started
+    - Active: work in progress
+    - Live / hypercare: the go-live task is done (or a go-live date is set)
+    - Closed: every task is done or not applicable
+    """
+    tasks = project.tasks
+    if tasks and all(t.is_finished for t in tasks):
+        return "closed"
     pre = project.tasks_in("pre")
-    pre_done = bool(pre) and all(t.is_finished for t in pre)
-    work_started = any(t.status in STARTED_STATUSES for t in project.tasks_in("project"))
-    if pre_done or work_started:
-        project.status = "active"
-        return "active"
+    work = project.tasks_in("project")
+    pre_done = all(t.is_finished for t in pre)
+    work_started = any(t.status in STARTED_STATUSES for t in work)
+    if pre and not pre_done and not work_started:
+        return "pre_project"
+    if project.go_live_date or any(is_go_live_task(t) and t.status == "done" for t in work):
+        return "live"
+    return "active"
+
+
+def sync_project_status(project):
+    """Bring the project status in line with its tasks (unless it is on hold
+    or cancelled). Also fills the go-live date from the go-live task.
+    Returns the new status if it changed, else None."""
+    for t in project.tasks:
+        if is_go_live_task(t) and t.status == "done" and not project.go_live_date:
+            project.go_live_date = t.completed_date
+    if project.status in MANUAL_STATUSES:
+        return None
+    new = computed_status(project)
+    if new != project.status:
+        project.status = new
+        return new
     return None
+
+
+def set_status_manually(project, status):
+    """Validate a status chosen by a person. Returns a list of errors."""
+    open_tasks = [t.name for t in project.tasks if not t.is_finished]
+    if status == "closed" and open_tasks:
+        shown = ", ".join(open_tasks[:5]) + (f" (+{len(open_tasks) - 5} more)" if len(open_tasks) > 5 else "")
+        return [f"Cannot close: {len(open_tasks)} task(s) still open: {shown}."]
+    if status in MANUAL_STATUSES:
+        project.status = status
+        return []
+    # any other choice means "follow the tasks"
+    project.status = computed_status(project)
+    return []
 
 
 def import_customers(names, template, open_last=0, manager=None, created_by=None):
