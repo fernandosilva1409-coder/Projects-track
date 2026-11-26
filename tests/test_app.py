@@ -203,3 +203,32 @@ def test_bulk_assign(client, app):
     client.post(f"/projects/{pid}/tasks/bulk", data={"task_ids": [str(ids[0])], "bulk_assignee_id": "none"})
     with app.app_context():
         assert db.session.get(ProjectTask, ids[0]).assignee_id is None
+
+
+def test_my_work_shows_only_mine_and_unassigned(client, app):
+    _cid, pid = _create_project(client, app)
+    client.post("/settings/users/new", data={"username": "antonio", "full_name": "Antonio", "active": "on",
+                                             "password": "password1"})
+    with app.app_context():
+        from app.models import User
+        me = User.query.filter_by(username="fernando").one()
+        other = User.query.filter_by(username="antonio").one()
+        p = db.session.get(Project, pid)
+        p.project_manager_id = other.id
+        tasks = sorted(p.tasks, key=lambda t: t.position)
+        tasks[0].assignee_id = other.id   # Antonio's task
+        tasks[1].assignee_id = me.id      # mine
+        names = (tasks[0].name, tasks[1].name, tasks[2].name)
+        me_id = me.id
+        db.session.commit()
+    page = client.get("/").data.decode()
+    assert names[1] in page and names[2] in page  # mine and unassigned
+    assert names[0] not in page                   # Antonio's
+    # a project where I'm not PM and have no tasks does not appear
+    with app.app_context():
+        t = db.session.get(Project, pid).tasks
+        for x in t:
+            if x.assignee_id == me_id:
+                x.assignee_id = None
+        db.session.commit()
+    assert "Acme CSDB" not in client.get("/").data.decode()

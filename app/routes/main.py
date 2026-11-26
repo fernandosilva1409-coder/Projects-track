@@ -16,31 +16,46 @@ bp = Blueprint("main", __name__)
 
 @bp.get("/")
 def dashboard():
-    open_projects = (
+    """Personal page: only my projects (PM or with tasks assigned to me), and
+    only tasks assigned to me or not assigned to anyone."""
+    me = current_user.id
+    all_open = (
         Project.query.join(Customer).filter(Project.status.in_(OPEN_PROJECT_STATUSES))
         .order_by(Customer.name, Project.name).all()
     )
-    open_ids = [p.id for p in open_projects] or [-1]
-    open_tasks = (
-        ProjectTask.query.filter(ProjectTask.project_id.in_(open_ids), ProjectTask.status.notin_(("done", "na")))
+    projects = [
+        p for p in all_open
+        if p.project_manager_id == me or any(t.assignee_id == me and not t.is_finished for t in p.tasks)
+    ]
+    ids = [p.id for p in projects] or [-1]
+    tasks = (
+        ProjectTask.query.filter(ProjectTask.project_id.in_(ids), ProjectTask.status.notin_(("done", "na")))
+        .filter(db.or_(ProjectTask.assignee_id == me, ProjectTask.assignee_id.is_(None)))
         .order_by(ProjectTask.due_date.is_(None), ProjectTask.due_date, ProjectTask.position).all()
     )
-    my_tasks = [t for t in open_tasks if t.assignee_id == current_user.id]
-    ready = [t for t in open_tasks if t.is_ready and t.status == "todo"]
-    overdue = [t for t in open_tasks if t.is_overdue]
-    blocked = [t for t in open_tasks if t.status == "blocked"]
+    my_tasks = [t for t in tasks if t.assignee_id == me]
+    unassigned = [t for t in tasks if t.assignee_id is None]
+    ready = [t for t in tasks if t.is_ready and t.status == "todo"]
+    overdue = [t for t in tasks if t.is_overdue]
+    blocked = [t for t in tasks if t.status == "blocked"]
+    next_steps = {p.id: [t for t in tasks if t.project_id == p.id and t.is_ready][:3] for p in projects}
 
     soon = date.today() + timedelta(days=14)
     to_issue = (
-        Invoice.query.filter(Invoice.status.in_(("planned", "to_issue")))
+        Invoice.query.filter(Invoice.project_id.in_(ids), Invoice.status.in_(("planned", "to_issue")))
         .filter(db.or_(Invoice.issue_date.is_(None), Invoice.issue_date <= soon))
         .order_by(Invoice.issue_date.is_(None), Invoice.issue_date).all()
     )
-    unpaid = Invoice.query.filter(Invoice.status.in_(("issued", "sent"))).order_by(Invoice.due_date).all()
-    recent = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(12).all()
+    unpaid = (Invoice.query.filter(Invoice.project_id.in_(ids), Invoice.status.in_(("issued", "sent")))
+              .order_by(Invoice.due_date).all())
+    others_tasks = [t.id for t in ProjectTask.query.filter(
+        ProjectTask.project_id.in_(ids), ProjectTask.assignee_id.isnot(None), ProjectTask.assignee_id != me)]
+    recent = (AuditLog.query.filter(AuditLog.project_id.in_(ids))
+              .filter(db.not_(db.and_(AuditLog.entity == "ProjectTask", AuditLog.entity_id.in_(others_tasks or [-1]))))
+              .order_by(AuditLog.created_at.desc()).limit(12).all())
     return render_template(
-        "main/dashboard.html", projects=open_projects, my_tasks=my_tasks, ready=ready, overdue=overdue,
-        blocked=blocked, to_issue=to_issue, unpaid=unpaid, recent=recent,
+        "main/dashboard.html", projects=projects, my_tasks=my_tasks, unassigned=unassigned, ready=ready,
+        overdue=overdue, blocked=blocked, to_issue=to_issue, unpaid=unpaid, recent=recent, next_steps=next_steps,
     )
 
 

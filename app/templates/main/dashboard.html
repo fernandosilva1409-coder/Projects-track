@@ -21,16 +21,18 @@
   <div class="actions"><a class="btn" href="{{ url_for('customers.new') }}">+ Customer</a><a class="btn primary" href="{{ url_for('projects.new') }}">+ Project</a></div>
 </div>
 <div class="stats">
-  <div class="stat"><div class="v">{{ projects|length }}</div><div class="k">Open projects</div></div>
+  <div class="stat"><div class="v">{{ projects|length }}</div><div class="k">My projects</div></div>
   <div class="stat"><div class="v">{{ my_tasks|length }}</div><div class="k">My open tasks</div></div>
-  <div class="stat"><div class="v">{{ ready|length }}</div><div class="k">Tasks ready to start</div></div>
+  <div class="stat"><div class="v">{{ unassigned|length }}</div><div class="k">Unassigned tasks</div></div>
+  <div class="stat"><div class="v">{{ ready|length }}</div><div class="k">Ready to start</div></div>
   <div class="stat"><div class="v" style="color:{{ 'var(--bad)' if overdue }}">{{ overdue|length }}</div><div class="k">Overdue tasks</div></div>
   <div class="stat"><div class="v">{{ to_issue|length }}</div><div class="k">Invoices to issue (14 days)</div></div>
   <div class="stat"><div class="v">{{ unpaid|length }}</div><div class="k">Invoices awaiting payment</div></div>
 </div>
 
 <div class="panel">
-  <h2>Open projects</h2>
+  <h2>My projects</h2>
+  <p class="help" style="margin-top:-.4rem">Projects where you are PM or have open tasks. Everything else is in <a href="{{ url_for('projects.index') }}">Projects</a> and <a href="{{ url_for('main.analytics') }}">Overall View</a>.</p>
   <div class="table-wrap"><table>
     <tr><th>Customer / project</th><th>Product</th><th>PM</th><th>Status</th><th>Target go-live</th><th>Progress</th><th>Next steps</th></tr>
     {% for p in projects %}
@@ -41,9 +43,9 @@
       <td>{{ badge(p.status, p.status_label) }}</td>
       <td class="small">{{ p.target_go_live|d }}</td>
       <td style="min-width:110px"><div class="progress"><span style="width:{{ p.progress }}%"></span></div><div class="small muted">{{ p.progress }}%</div></td>
-      <td class="small">{% for t in p.tasks if t.is_ready %}{% if loop.index <= 3 %}<div>{{ t.name }}{% if t.status == 'in_progress' %} <span class="badge in_progress">in progress</span>{% endif %}</div>{% endif %}{% endfor %}</td>
+      <td class="small">{% for t in next_steps[p.id] %}<div>{{ t.name }}{% if not t.assignee_id %} <span class="badge waiting">unassigned</span>{% endif %}{% if t.status == 'in_progress' %} <span class="badge in_progress">in progress</span>{% endif %}</div>{% endfor %}</td>
     </tr>
-    {% else %}<tr><td colspan="7" class="empty">No open projects yet. <a href="{{ url_for('projects.new') }}">Create the first one</a>.</td></tr>
+    {% else %}<tr><td colspan="7" class="empty">You are not PM of any open project and have no open tasks.</td></tr>
     {% endfor %}
   </table></div>
 </div>
@@ -51,7 +53,8 @@
 <div class="grid two">
   <div class="panel"><h2>My open tasks</h2>{{ task_rows(my_tasks, False) }}</div>
   <div class="panel"><h2>Overdue or blocked</h2>{{ task_rows(overdue + (blocked|reject('in', overdue)|list)) }}</div>
-  <div class="panel"><h2>Ready to start</h2><div class="help" style="margin:-.5rem 0 .5rem">All prerequisites are done.</div>{{ task_rows(ready) }}</div>
+  <div class="panel"><h2>Ready to start</h2><div class="help" style="margin:-.5rem 0 .5rem">Your tasks and unassigned tasks whose prerequisites are done.</div>{{ task_rows(ready) }}</div>
+  <div class="panel"><h2>Unassigned tasks in my projects</h2>{{ task_rows(unassigned, False) }}</div>
   <div class="panel">
     <h2>Invoices to follow up</h2>
     <div class="table-wrap"><table>
