@@ -232,3 +232,21 @@ def test_my_work_shows_only_mine_and_unassigned(client, app):
                 x.assignee_id = None
         db.session.commit()
     assert "Acme CSDB" not in client.get("/").data.decode()
+
+
+def test_add_customers_command(app):
+    runner = app.test_cli_runner()
+    names = ["Puleo", "Petrone - Euromed Pharma Services"]
+    r = runner.invoke(args=["add-customers", *names, "--open-last", "1", "--pm", "fernando"])
+    assert r.exit_code == 0, r.output
+    r2 = runner.invoke(args=["add-customers", *names, "--open-last", "1"])
+    assert "skipped" in r2.output
+    with app.app_context():
+        from app.models import Customer
+        for n in names:
+            c = Customer.query.filter_by(name=n).one()
+            assert len(c.projects) == 1
+            p = c.projects[0]
+            open_tasks = [t.name for t in p.tasks if t.status != "done"]
+            assert open_tasks == ["Jira and project finalization handover"]
+            assert p.status == "active" and p.project_manager.username == "fernando"

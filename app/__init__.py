@@ -163,6 +163,53 @@ def register_cli(app):
         else:
             click.echo(f"Admin user '{username}' created.")
 
+    @app.cli.command("add-customers")
+    @click.argument("names", nargs=-1, required=True)
+    @click.option("--template", "template_name", default="Platbricks Health Care Suite", show_default=True)
+    @click.option("--open-last", default=0, type=int,
+                  help="Mark every task done except the last N project tasks.")
+    @click.option("--pm", default=None, help="Username of the project manager.")
+    def add_customers(names, template_name, open_last, pm):
+        """Create customers, each with a project from a template. Safe to re-run:
+        existing customers/projects are left untouched."""
+        from datetime import date as _date
+
+        from .models import Customer, Project, ProjectTemplate
+        from .services import create_project_from_template, sync_project_status
+
+        tpl = ProjectTemplate.query.filter_by(name=template_name).first()
+        if not tpl:
+            raise click.ClickException(f"Template '{template_name}' not found.")
+        manager = User.query.filter_by(username=pm.lower()).first() if pm else None
+        if pm and not manager:
+            raise click.ClickException(f"User '{pm}' not found.")
+        for name in (n.strip() for n in names):
+            if not name:
+                continue
+            customer = Customer.query.filter_by(name=name).first()
+            if customer is None:
+                customer = Customer(name=name)
+                db.session.add(customer)
+                db.session.flush()
+                click.echo(f"+ customer {name}")
+            if any(p.template_id == tpl.id for p in customer.projects):
+                click.echo(f"= {name}: already has a {tpl.name} project, skipped")
+                continue
+            project = Project(customer_id=customer.id, template=tpl, name=name, project_manager=manager,
+                              status="pre_project", start_date=_date.today())
+            create_project_from_template(project)
+            db.session.add(project)
+            ordered = sorted(project.tasks, key=lambda t: (t.phase != "pre", t.position))
+            keep_open = {id(t) for t in ordered[len(ordered) - open_last:]} if open_last else set()
+            for t in ordered:
+                if id(t) not in keep_open:
+                    t.status, t.completed_date = "done", _date.today()
+            sync_project_status(project)
+            db.session.flush()
+            still_open = [t.name for t in ordered if id(t) in keep_open]
+            click.echo(f"+ project {name} ({tpl.name}); open: {', '.join(still_open) or 'none'}")
+        db.session.commit()
+
     @app.cli.command("create-user")
     @click.argument("username")
     @click.option("--name", default=None, help="Full name")
