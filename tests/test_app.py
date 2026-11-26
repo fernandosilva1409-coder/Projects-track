@@ -250,3 +250,19 @@ def test_add_customers_command(app):
             open_tasks = [t.name for t in p.tasks if t.status != "done"]
             assert open_tasks == ["Jira and project finalization handover"]
             assert p.status == "active" and p.project_manager.username == "fernando"
+
+
+def test_import_customers_page(client, app):
+    with app.app_context():
+        tid = ProjectTemplate.query.filter_by(name="Platbricks Health Care Suite").one().id
+    assert client.get("/customers/import").status_code == 200
+    data = {"names": "Puleo\nEuromed Pharma\n\nPuleo", "template_id": str(tid), "pm_id": "", "progress": "last1"}
+    r = client.post("/customers/import", data=data)
+    assert r.status_code == 200 and b"project created" in r.data
+    r = client.post("/customers/import", data=data)
+    assert b"skipped" in r.data
+    with app.app_context():
+        from app.models import Customer
+        assert Customer.query.count() == 2
+        for c in Customer.query.all():
+            assert [t.name for t in c.projects[0].tasks if t.status != "done"] == ["Jira and project finalization handover"]

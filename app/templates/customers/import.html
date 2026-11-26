@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import csrf %}
+{% block title %}Import customers{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="muted"><a href="{{ url_for('customers.index') }}">Customers</a></div><h1>Import customers</h1>
+  <div class="muted">Create several customers at once, each with a project from a template.</div></div></div>
+{% if results %}
+<div class="panel"><h2>Result</h2><ul>{% for r in results %}<li>{{ r }}</li>{% endfor %}</ul>
+  <a class="btn" href="{{ url_for('customers.index') }}">Go to customers</a></div>
+{% endif %}
+<div class="panel">
+  <form method="post">
+    {{ csrf() }}
+    <div class="form-grid">
+      <div class="wide"><label class="lbl" for="names">Customer names (one per line) *</label>
+        <textarea id="names" name="names" rows="8" required placeholder="Customer A&#10;Customer B">{{ request.form.get('names', '') }}</textarea>
+        <div class="help">Existing customers are reused. A customer that already has a project from the chosen template is skipped, so importing twice is safe.</div></div>
+      <div><label class="lbl" for="template_id">Project template *</label>
+        <select id="template_id" name="template_id" required>
+          {% for t in templates %}<option value="{{ t.id }}" {{ 'selected' if 'Platbricks' in t.name }}>{{ t.name }}</option>{% endfor %}
+        </select></div>
+      <div><label class="lbl" for="pm_id">Project manager</label>
+        <select id="pm_id" name="pm_id"><option value="">—</option>
+          {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if u.id == current_user.id }}>{{ u.display_name }}</option>{% endfor %}
+        </select></div>
+      <div class="wide"><span class="lbl">Task progress</span>
+        <label class="checkbox"><input type="radio" name="progress" value="new" checked> New project: all tasks to do</label>
+        <label class="checkbox"><input type="radio" name="progress" value="last1"> Almost finished: everything done except the last task</label>
+        <label class="checkbox"><input type="radio" name="progress" value="all_done"> Finished: all tasks done</label>
+      </div>
+    </div>
+    <div class="form-actions"><div class="actions"><button class="primary" type="submit">Import</button><a class="btn" href="{{ url_for('customers.index') }}">Cancel</a></div></div>
+  </form>
+</div>
+{% endblock %}

@@ -171,3 +171,44 @@ def sync_project_status(project):
         project.status = "active"
         return "active"
     return None
+
+
+def import_customers(names, template, open_last=0, manager=None, created_by=None):
+    """Create customers (if missing), each with a project from ``template``
+    named after the customer. All tasks are marked done except the last
+    ``open_last``. Customers that already have a project from this template
+    are skipped, so it is safe to run twice. Returns one message per name.
+    The caller commits."""
+    from datetime import date
+
+    from .models import Customer
+
+    messages = []
+    seen = set()
+    for name in (n.strip() for n in names):
+        if not name or name.lower() in seen:
+            continue
+        seen.add(name.lower())
+        customer = Customer.query.filter(db.func.lower(Customer.name) == name.lower()).first()
+        created = customer is None
+        if created:
+            customer = Customer(name=name)
+            db.session.add(customer)
+            db.session.flush()
+        if any(p.template_id == template.id for p in customer.projects):
+            messages.append(f"{customer.name}: already has a {template.name} project, skipped")
+            continue
+        project = Project(customer_id=customer.id, template=template, name=customer.name,
+                          project_manager=manager, created_by=created_by,
+                          status="pre_project", start_date=date.today())
+        create_project_from_template(project)
+        db.session.add(project)
+        ordered = sorted(project.tasks, key=lambda t: (t.phase != "pre", t.position))
+        cut = max(len(ordered) - max(open_last, 0), 0)
+        for t in ordered[:cut]:
+            t.status, t.completed_date = "done", date.today()
+        sync_project_status(project)
+        db.session.flush()
+        still_open = ", ".join(t.name for t in ordered[cut:]) or "none"
+        messages.append(f"{customer.name}: {'customer and ' if created else ''}project created; open: {still_open}")
+    return messages

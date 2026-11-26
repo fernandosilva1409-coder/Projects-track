@@ -1,6 +1,7 @@
 from datetime import date
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask_login import current_user
 
 from ..extensions import db
 from ..forms import Field, apply_form
@@ -91,3 +92,29 @@ def delete(id):
     db.session.commit()
     flash("Customer deleted. It stays visible in the history.", "success")
     return redirect(url_for("customers.index"))
+
+
+@bp.route("/import", methods=["GET", "POST"])
+def bulk_import():
+    """Admin page: create several customers at once, each with a project."""
+    from ..models import ProjectTemplate, User
+    from ..services import import_customers
+
+    if not current_user.is_admin:
+        abort(403)
+    templates = ProjectTemplate.query.filter_by(active=True).order_by(ProjectTemplate.name).all()
+    users = User.query.filter_by(active=True).order_by(User.full_name).all()
+    results = None
+    if request.method == "POST":
+        names = (request.form.get("names") or "").splitlines()
+        tpl = db.session.get(ProjectTemplate, request.form.get("template_id", type=int) or 0)
+        pm = db.session.get(User, request.form.get("pm_id", type=int) or 0)
+        mode = request.form.get("progress", "new")
+        open_last = {"new": 10_000, "last1": 1, "all_done": 0}.get(mode, 10_000)
+        if not tpl or not any(n.strip() for n in names):
+            flash("Enter at least one customer name and choose a template.", "error")
+        else:
+            results = import_customers(names, tpl, open_last, pm, current_user)
+            db.session.commit()
+            flash(f"Import finished ({len(results)} line(s)).", "success")
+    return render_template("customers/import.html", templates=templates, users=users, results=results)

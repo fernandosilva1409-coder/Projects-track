@@ -172,10 +172,7 @@ def register_cli(app):
     def add_customers(names, template_name, open_last, pm):
         """Create customers, each with a project from a template. Safe to re-run:
         existing customers/projects are left untouched."""
-        from datetime import date as _date
-
-        from .models import Customer, Project, ProjectTemplate
-        from .services import create_project_from_template, sync_project_status
+        from .models import ProjectTemplate
 
         tpl = ProjectTemplate.query.filter_by(name=template_name).first()
         if not tpl:
@@ -183,31 +180,10 @@ def register_cli(app):
         manager = User.query.filter_by(username=pm.lower()).first() if pm else None
         if pm and not manager:
             raise click.ClickException(f"User '{pm}' not found.")
-        for name in (n.strip() for n in names):
-            if not name:
-                continue
-            customer = Customer.query.filter_by(name=name).first()
-            if customer is None:
-                customer = Customer(name=name)
-                db.session.add(customer)
-                db.session.flush()
-                click.echo(f"+ customer {name}")
-            if any(p.template_id == tpl.id for p in customer.projects):
-                click.echo(f"= {name}: already has a {tpl.name} project, skipped")
-                continue
-            project = Project(customer_id=customer.id, template=tpl, name=name, project_manager=manager,
-                              status="pre_project", start_date=_date.today())
-            create_project_from_template(project)
-            db.session.add(project)
-            ordered = sorted(project.tasks, key=lambda t: (t.phase != "pre", t.position))
-            keep_open = {id(t) for t in ordered[len(ordered) - open_last:]} if open_last else set()
-            for t in ordered:
-                if id(t) not in keep_open:
-                    t.status, t.completed_date = "done", _date.today()
-            sync_project_status(project)
-            db.session.flush()
-            still_open = [t.name for t in ordered if id(t) in keep_open]
-            click.echo(f"+ project {name} ({tpl.name}); open: {', '.join(still_open) or 'none'}")
+        from .services import import_customers
+
+        for line in import_customers(names, tpl, open_last, manager):
+            click.echo(line)
         db.session.commit()
 
     @app.cli.command("create-user")
