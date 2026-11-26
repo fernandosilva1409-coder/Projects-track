@@ -14,6 +14,7 @@
     <h2>Details</h2>
     <dl class="kv">
       <dt>VAT number</dt><dd>{{ customer.vat_number or '—' }}</dd>
+      <dt>CATS number</dt><dd>{{ customer.cats_number or '—' }}</dd>
       <dt>Website</dt><dd>{% if customer.website %}<a href="{{ customer.website }}" target="_blank" rel="noopener">{{ customer.website }}</a>{% else %}—{% endif %}</dd>
       <dt>Address</dt><dd style="white-space:pre-line">{{ customer.address or '—' }}</dd>
       <dt>Notes</dt><dd style="white-space:pre-line">{{ customer.notes or '—' }}</dd>

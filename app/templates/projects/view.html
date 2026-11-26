@@ -68,6 +68,7 @@
       <dt>Start</dt><dd>{{ p.start_date|d or '—' }}</dd>
       <dt>Target go-live</dt><dd>{{ p.target_go_live|d or '—' }}</dd>
       <dt>Actual go-live</dt><dd>{{ p.go_live_date|d or '—' }}</dd>
+      <dt>CATS number</dt><dd>{{ p.customer.cats_number or '—' }}</dd>
       <dt>Controlling project</dt><dd>{{ p.controlling_project_ref or '—' }}</dd>
       <dt>SharePoint</dt><dd>{% if p.sharepoint_url %}<a href="{{ p.sharepoint_url }}" target="_blank" rel="noopener">Open folder</a>{% else %}—{% endif %}</dd>
       <dt>Jira</dt><dd>{% if p.jira_url %}<a href="{{ p.jira_url }}" target="_blank" rel="noopener">Open Jira</a>{% else %}—{% endif %}</dd>

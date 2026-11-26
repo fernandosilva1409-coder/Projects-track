@@ -11,6 +11,7 @@ bp = Blueprint("customers", __name__, url_prefix="/customers")
 FIELDS = [
     Field("name", "Customer name", required=True),
     Field("vat_number", "VAT number"),
+    Field("cats_number", "CATS number", help="Optional. Number used to book time (imputar) in CATS."),
     Field("country", "Country"),
     Field("website", "Website", "url"),
     Field("address", "Address (invoicing)", "textarea"),

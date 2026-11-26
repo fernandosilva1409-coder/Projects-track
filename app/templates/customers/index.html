@@ -4,16 +4,17 @@
 <div class="page-head"><h1>Customers</h1><a class="btn primary" href="{{ url_for('customers.new') }}">+ New customer</a></div>
 <form class="filters" method="get"><input type="search" name="q" value="{{ q }}" placeholder="Search customers"><button type="submit">Search</button></form>
 <div class="panel"><div class="table-wrap"><table>
-  <tr><th>Customer</th><th>Country</th><th>Contacts</th><th>Projects</th><th>Invoice contact</th></tr>
+  <tr><th>Customer</th><th>CATS number</th><th>Country</th><th>Contacts</th><th>Projects</th><th>Invoice contact</th></tr>
   {% for c in customers %}
   <tr>
     <td><a href="{{ url_for('customers.view', id=c.id) }}">{{ c.name }}</a></td>
+    <td>{{ c.cats_number or '' }}</td>
     <td>{{ c.country or '' }}</td>
     <td>{{ c.contacts|length }}</td>
     <td>{% for p in c.projects %}<div class="small"><a href="{{ url_for('projects.view', id=p.id) }}">{{ p.name }}</a> <span class="badge {{ p.status }}">{{ p.status_label }}</span></div>{% endfor %}</td>
     <td class="small">{% for ic in c.invoice_contacts %}{{ ic.name }}{% if ic.email %} &lt;{{ ic.email }}&gt;{% endif %}<br>{% endfor %}</td>
   </tr>
-  {% else %}<tr><td colspan="5" class="empty">No customers yet.</td></tr>
+  {% else %}<tr><td colspan="6" class="empty">No customers yet.</td></tr>
   {% endfor %}
 </table></div></div>
 {% endblock %}

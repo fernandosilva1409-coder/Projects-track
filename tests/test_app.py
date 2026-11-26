@@ -14,7 +14,7 @@ def test_login_required(app):
 
 
 def _create_project(client, app, template_name="CSDB Multiclient & Kubernetes"):
-    r = client.post("/customers/new", data={"name": "Acme Pharma", "country": "Portugal"})
+    r = client.post("/customers/new", data={"name": "Acme Pharma", "country": "Portugal", "cats_number": "CATS-4711"})
     cid = new_id(r)
     with app.app_context():
         tid = ProjectTemplate.query.filter_by(name=template_name).one().id
@@ -34,6 +34,9 @@ def test_full_flow(client, app):
         first = next(t for t in p.tasks if t.name == "Contract signed and details uploaded")
         assert first.is_ready and not kickoff.is_ready
         first_id, kickoff_id = first.id, kickoff.id
+
+    assert b"CATS-4711" in client.get(f"/customers/{cid}").data
+    assert b"CATS-4711" in client.get(f"/projects/{pid}").data
 
     # every page renders
     for url in ["/", "/customers/", f"/customers/{cid}", "/projects/", f"/projects/{pid}", "/invoices",

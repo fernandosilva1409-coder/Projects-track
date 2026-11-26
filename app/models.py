@@ -99,6 +99,7 @@ class Customer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), unique=True, nullable=False)
     vat_number = db.Column(db.String(60))
+    cats_number = db.Column(db.String(60))  # SAP CATS number for time booking
     address = db.Column(db.Text)
     country = db.Column(db.String(80))
     website = db.Column(db.String(300))
